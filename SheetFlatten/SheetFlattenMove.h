@@ -43,6 +43,28 @@ typedef struct interseLine_Line
 	vector<TopoDS_Edge> interseLine;
 	vector<TopoDS_Edge> Line;
 };
+struct EdgeData
+{
+	
+	TopoDS_Edge oldEdge_2d;
+	vector<TopoDS_Edge> vector_newEdge_2d;
+	vector<TopoDS_Face> vector_face;
+	vector<TopoDS_Edge> vector_interseEdge_sameFace_2d;//共面且相交
+	vector<TopoDS_Edge> vector_interseEdge_2d;//只相交，无所谓共面
+	vector<TopoDS_Edge> vector_sameFaceEdge_2d;//共面但不相交
+	vector<TopoDS_Edge> vector_interseEdge_new2d;//共面且相交判断条件在新二维的基础上
+	bool bMidleEdge;
+	bool bOverlapeEdge;
+	bool bSoltEdge;
+	double angle;
+	TopoDS_Edge ContourEdge;
+	gp_Pnt overLapEdge_Point;
+
+	EdgeData()
+		:bMidleEdge(false),bOverlapeEdge(false),bSoltEdge(false),angle(0.)
+	{
+	}
+};
 
 class SheetFalttenMove
 {
@@ -75,9 +97,11 @@ private:
 	void allReation2dNewEdge();
 	void findSameEdge(map<TopoDS_Edge, TopoDS_Edge> &result);
 	bool TrimEdgesAtIntersection1(TopoDS_Edge& theEdge1, TopoDS_Edge& theEdge2, gp_Pnt& theIntersection);
+	TopoDS_Edge TranslatePositiveEdge(const TopoDS_Edge& edge, const gp_Trsf& translation, TopoDS_Edge& theNewEdge, TopoDS_Edge& theNewEdge2);
 	void openSlot();
 	void wrapAngle();
 	void makeLapelMap();
+	void processOutline();
 	void translateLapel(const double theDistance);
 	bool isSameFace(const TopoDS_Edge& theLeftEdge, const TopoDS_Edge& theRightEdge);
 	bool AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
@@ -93,6 +117,8 @@ public:
 	void generateEdge(const TopoDS_Edge& theEdge);
 	//void getRefDir(const TopoDS_Edge& edge);
 public:
+	TopTools_IndexedMapOfShape faceMap;
+	map<TopoDS_Edge,EdgeData> m_ThreeToInformation;
 	map<TopoDS_Edge, vector<TopoDS_Face> > m_MapEdgeAdjFaces;
 	map<TopoDS_Edge, TopoDS_Edge> m_ThreeToTwoEdge;
 	map<TopoDS_Edge, TopoDS_Edge> m_TwoToThreeEdge;
@@ -219,15 +245,41 @@ void SheetFalttenMove::translateLapel(const double theDistance)
 
 		m_oldMapNewEdge.find(aLapelEdge1)->second.emplace_back(aTranslateLaterEdge1);
 		m_oldMapNewEdge.find(aLapelEdge2)->second.emplace_back(aTranslateLaterEdge2);
+		vector<TopoDS_Edge> aEdges;
 
-		m_oldMapNewEdge.find(aOldLapelInterEdge1)->second.emplace_back(aNewLapelInterEdge1);
-		m_oldMapNewEdge.find(aOldLapelInterEdge2)->second.emplace_back(aNewLapelInterEdge2);
+		if (findMap_EdgeAndVector_ToVector(m_oldMapNewEdge, aOldLapelInterEdge1, aEdges))
+		{
+			if (aEdges.size() > 1)
+			{
+				m_oldMapNewEdge.find(aOldLapelInterEdge1)->second[aEdges.size() - 1] = aNewLapelInterEdge1;
+			}
+			else
+			{
+				m_oldMapNewEdge.find(aOldLapelInterEdge1)->second.emplace_back(aNewLapelInterEdge1);
+			}
+		}
+
+		if (findMap_EdgeAndVector_ToVector(m_oldMapNewEdge, aOldLapelInterEdge2, aEdges))
+		{
+			if (aEdges.size() > 1)
+			{
+				m_oldMapNewEdge.find(aOldLapelInterEdge2)->second[aEdges.size() - 1] = aNewLapelInterEdge2;
+			}
+			else
+			{
+				m_oldMapNewEdge.find(aOldLapelInterEdge2)->second.emplace_back(aNewLapelInterEdge2);
+			}
+		}
+
+		//m_oldMapNewEdge.find(aOldLapelInterEdge1)->second.emplace_back(aNewLapelInterEdge1);
+		//m_oldMapNewEdge.find(aOldLapelInterEdge2)->second.emplace_back(aNewLapelInterEdge2);
 
 
 	}
 }
 bool SheetFalttenMove::findMap_EdgeAndVector_ToVector(const map<TopoDS_Edge, vector<TopoDS_Edge>>& MapEdge, const TopoDS_Edge& theOldEdge, vector<TopoDS_Edge>& theVector)
 {
+	theVector.clear();
 	if (MapEdge.find(theOldEdge) != MapEdge.end())
 	{
 		auto iter = MapEdge.find(theOldEdge);
@@ -515,6 +567,10 @@ bool isOverlap(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2)
 bool SheetFalttenMove::SegmentsOverlap(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, TopoDS_Edge& newEdge1, TopoDS_Edge& newEdge2,
  gp_Pnt &newPoint1,gp_Pnt &newPoint2,gp_Pnt &startPoint1,gp_Pnt &startPoint2, gp_Vec &directionVec1, gp_Vec& directionVec2) {
 	gp_Pnt basePoint;
+	if (AreEdgesSameEndpoints(edge1, edge2))
+	{
+		return false;
+	}
 	// 获取线段1的端点
 	TopoDS_Vertex v1_1 = TopExp::FirstVertex(edge1);
 	TopoDS_Vertex v1_2 = TopExp::LastVertex(edge1);
@@ -537,7 +593,6 @@ bool SheetFalttenMove::SegmentsOverlap(const TopoDS_Edge& edge1, const TopoDS_Ed
 		// 如果叉积不为零，说明不共线
 		return false;
 	}
-
 	// 检查是否在同一直线上，可以比较两个点的方向向量
 	gp_Vec dir1(p1_1, p2_1);
 	gp_Vec dir2(p1_1, p2_2);
@@ -712,7 +767,8 @@ bool SheetFalttenMove::findMap_EdgeAndVector_ToEdge(const map<TopoDS_Edge, vecto
 	if (MapEdge.find(theOldEdge) != MapEdge.end())
 	{
 		auto iter = MapEdge.find(theOldEdge);
-		theNewEdge = iter->second[0];
+		theNewEdge = iter->second.back();
+		//theNewEdge = iter->second[0];
 		return true;
 	}
 	return false;
@@ -826,51 +882,7 @@ void SheetFalttenMove::processOverlap()
 					newTarEdge2 = BRepBuilderAPI_MakeEdge(aPoint2, vecticalPoint2);
 					tempEdge2 = BRepBuilderAPI_MakeEdge(vecticalPoint2, aStartPoint2);
 					
-					//通过2d线找到3d线，找到面，找到共线的线
 					
-					
-					/*if (_2dTo3dEdge(m_TwoToThreeEdge, oldTarEdge1_2d,oldTarEdge1_3d))
-					{
-						TopoDS_Face aFace1, aFace2;
-						if (_3dEdgeToFace(m_MapEdgeAdjFaces, oldTarEdge1_2d, aFace1))
-						{
-
-						}
-					}
-					relationEdge(it.first);
-					relationEdge(item.first);
-					if (m_interseLine_LineMap.find(it.first) != m_interseLine_LineMap.end())
-					{
-						for (auto elem : m_interseLine_LineMap.find(it.first)->second.Line)
-						{
-							gp_Pnt tarPoint = ProjectPointOntoEdge(aInterPoint1, elem);
-							newTarEdge1 = BRepBuilderAPI_MakeEdge(aInterPoint1, tarPoint);
-						}
-					}
-					if (m_interseLine_LineMap.find(item.first) != m_interseLine_LineMap.end())
-					{
-						for (auto elem : m_interseLine_LineMap.find(item.first)->second.Line)
-						{
-							gp_Pnt tarPoint = ProjectPointOntoEdge(aInterPoint2, elem);
-							newTarEdge2 = BRepBuilderAPI_MakeEdge(aInterPoint2, tarPoint);
-						}
-					}*/
-					
-					
-					/*if (m_TwoToThreeEdge.find(it.second[0]) != m_TwoToThreeEdge.end())
-					{
-						auto iter = m_TwoToThreeEdge.find(it.second[0]);
-						m_TwoToThreeEdge[tempEdge1] = iter->second;
-					}
-					if (m_TwoToThreeEdge.find(item.second[0]) != m_TwoToThreeEdge.end())
-					{
-						auto iter = m_TwoToThreeEdge.find(item.second[0]);
-						m_TwoToThreeEdge[tempEdge2] = iter->second;
-					}
-					it.second[0] = tempEdge1;
-					item.second[0] = tempEdge2;
-					updateData(m_TwoToThreeEdge, oldTarEdge1, newTarEdge1);
-					updateData(m_TwoToThreeEdge, oldTarEdge2, newTarEdge2);*/
 					vector<TopoDS_Edge> aEdges;
 					aEdges.emplace_back(tempEdge2);
 					m_oldMapNewEdge[it.second] = aEdges;
@@ -890,7 +902,7 @@ void SheetFalttenMove::processOverlap()
 					aEdges.clear();
 
 
-					TopoDS_Compound aCompound;
+					/*TopoDS_Compound aCompound;
 					BRep_Builder aBuilder;
 					aBuilder.MakeCompound(aCompound);
 					for (auto it : m_ThreeToTwoEdge)
@@ -911,7 +923,7 @@ void SheetFalttenMove::processOverlap()
 							aBuilder.Add(aCompound, edge);
 						}
 					}
-					FlattenFace::BuildDocStd(aCompound);
+					FlattenFace::BuildDocStd(aCompound);*/
 
 				}
 			}
@@ -1030,19 +1042,19 @@ void SheetFalttenMove::FindEdgesOnBothSides(const map< TopoDS_Edge, TopoDS_Edge>
 		sideStart = GetPointSide(baseStart, baseEnd, startPnt);
 		sideEnd = GetPointSide(baseStart, baseEnd, endPnt);
 		// 如果两个端点都在同一侧
-		if ((sideStart >= 0 && sideEnd > 0) || ((sideStart > 0 && sideEnd >= 0))) {
-			rightEdges.push_back(item.second);  // 在右侧
-		}
-		else if ((sideStart <= 0 && sideEnd < 0) || ((sideStart < 0 && sideEnd <= 0))) {
-			leftEdges.push_back(item.second); // 在左侧
-		}
-		else if (sideStart == 0 && sideEnd == 0)
-		{
-			colines.push_back(item.second);
-		}
-		else {
-			otherlines.push_back(item.second);
-		}
+if ((sideStart >= 0 && sideEnd > 0) || ((sideStart > 0 && sideEnd >= 0))) {
+	rightEdges.push_back(item.second);  // 在右侧
+}
+else if ((sideStart <= 0 && sideEnd < 0) || ((sideStart < 0 && sideEnd <= 0))) {
+	leftEdges.push_back(item.second); // 在左侧
+}
+else if (sideStart == 0 && sideEnd == 0)
+{
+	colines.push_back(item.second);
+}
+else {
+	otherlines.push_back(item.second);
+}
 	}
 }
 
@@ -1063,13 +1075,36 @@ TopoDS_Edge SheetFalttenMove::TranslateEdge(const TopoDS_Edge& edge, const gp_Tr
 
 	return newEdge;
 }
+
+TopoDS_Edge SheetFalttenMove::TranslatePositiveEdge(const TopoDS_Edge& edge, const gp_Trsf& translation, TopoDS_Edge& theNewEdge1, TopoDS_Edge& theNewEdge2)
+{
+	TopoDS_Vertex v1 = TopExp::FirstVertex(edge);  // 获取起点
+	TopoDS_Vertex v2 = TopExp::LastVertex(edge);   // 获取终点
+	gp_Vec translationVec = translation.TranslationPart();
+	gp_Pnt p1 = BRep_Tool::Pnt(v1);  // 获取起点坐标
+	gp_Pnt p2 = BRep_Tool::Pnt(v2);
+
+	gp_Pnt old_p1 = p1;
+	gp_Pnt old_p2 = p2;
+
+
+	// 5. 对边的两个端点应用平移
+	p1.Transform(translation);  // 移动起点
+	p2.Transform(translation);  // 移动终点
+	theNewEdge1 = BRepBuilderAPI_MakeEdge(old_p1, p1);
+	theNewEdge2 = BRepBuilderAPI_MakeEdge(old_p2, p2);
+	// 6. 使用移动后的点构造新的边
+	TopoDS_Edge newEdge = BRepBuilderAPI_MakeEdge(p1, p2);
+
+	return newEdge;
+}
 //包角时朝着向量方向移动边,裁剪边
-TopoDS_Edge SheetFalttenMove::calRetractTranslate(const TopoDS_Edge& theEdge,const TopoDS_Face & theFace, const double theDistance ,double theAngle) {
+TopoDS_Edge SheetFalttenMove::calRetractTranslate(const TopoDS_Edge& theEdge, const TopoDS_Face& theFace, const double theDistance, double theAngle) {
 	// 1. 获取边的两个端点
 	gp_Trsf translation;
-	TopoDS_Edge a2dBaseEdge,a2dTarEdge,a2dNewEdge,a2dInterEdge;
+	TopoDS_Edge a2dBaseEdge, a2dTarEdge, a2dNewEdge, a2dInterEdge;
 	TopoDS_Edge newEdge;
-	gp_Pnt p1, p2,intersection;
+	gp_Pnt p1, p2, intersection;
 	bool isReduct = true;
 	relationEdge(theEdge);
 	if (findMap_EdgeAndEdge_ToEdge(m_ThreeToTwoEdge, theEdge, a2dBaseEdge))
@@ -1098,6 +1133,7 @@ TopoDS_Edge SheetFalttenMove::calRetractTranslate(const TopoDS_Edge& theEdge,con
 			{
 				continue;
 			}
+			
 			TopoDS_Vertex w1 = TopExp::FirstVertex(a2dTarEdge);  // 获取起点
 			TopoDS_Vertex w2 = TopExp::LastVertex(a2dTarEdge);
 			gp_Pnt startPnt = BRep_Tool::Pnt(w1);
@@ -1146,16 +1182,23 @@ TopoDS_Edge SheetFalttenMove::calRetractTranslate(const TopoDS_Edge& theEdge,con
 	{
 		return newEdge;
 	}
-	if (m_interseLine_LineMap.find(theEdge) != m_interseLine_LineMap.end())
+	if (m_MapInterseLines.find(a2dBaseEdge) != m_MapInterseLines.end())
 	{
-		for (auto elem : m_interseLine_LineMap.find(theEdge)->second.interseLine)
+		for (auto elem : m_MapInterseLines.find(a2dBaseEdge)->second)
 		{
-			if (findMap_EdgeAndVector_ToEdge(m_oldMapNewEdge, elem, a2dInterEdge))
+			vector<TopoDS_Edge> aEdges;
+			if (findMap_EdgeAndVector_ToVector(m_oldMapNewEdge, elem, aEdges))
 			{
-				if (!isReduct)
+				if (aEdges.size() >= 3)
 				{
+					continue;
+				}
+				//if (!isReduct)
+				{
+					a2dInterEdge = aEdges.back();
 					TrimEdgesAtIntersection1(newEdge, a2dInterEdge, intersection);
-					m_oldMapNewEdge[elem][0] = a2dInterEdge;
+					//m_oldMapNewEdge[elem][aEdges.size()-1] = a2dInterEdge;
+					m_oldMapNewEdge[elem].emplace_back(a2dInterEdge);
 				}
 				//TrimEdgesAtIntersection1(newEdge, a2dInterEdge, intersection);
 				//m_oldMapNewEdge[elem][0] = a2dInterEdge;
@@ -1432,6 +1475,8 @@ void SheetFalttenMove::allReation2dEdge()
 			}
 		}
 		m_MapInterseLines[baseEdge] = interseEdges;
+		auto aData = m_ThreeToInformation.find(it.first);
+		aData->second.vector_interseEdge_2d = interseEdges;
 		interseEdges.clear();
 	}
 }
@@ -1464,6 +1509,8 @@ void SheetFalttenMove::allReation2dNewEdge()
 				}
 			}
 		}
+		auto aData = m_ThreeToInformation.find(it.first);
+		aData->second.vector_interseEdge_new2d = interseEdges;
 		m_MapInterseNewLines[it.second] = interseEdges;
 		interseEdges.clear();
 	}
@@ -1779,8 +1826,44 @@ void SheetFalttenMove::wrapAngle()
 		}
 	}
 }
+void SheetFalttenMove::processOutline()
+{
+	for (auto elem : m_oldMapNewEdge)
+	{
+		if (elem.second.size() < 3)
+		{
+			TopoDS_Edge aBaseEdge = elem.second.back();
+			vector<TopoDS_Edge> aTarVectorEdges;
+			TopoDS_Edge aTarEdge;
+			if (findMap_EdgeAndVector_ToVector(m_MapInterseNewLines, elem.first, aTarVectorEdges))
+			{
+				for (auto tarElem : aTarVectorEdges)
+				{
+					vector<TopoDS_Edge> aTarVectorNewEdges;
+					if (findMap_EdgeAndVector_ToVector(m_oldMapNewEdge, tarElem, aTarVectorNewEdges))
+					{
+						if (aTarVectorNewEdges.size() < 3)
+						{
+							aTarEdge = aTarVectorNewEdges.back();
+							gp_Pnt intersection;
+							TrimEdgesAtIntersection1(aBaseEdge, aTarEdge, intersection);
+							m_oldMapNewEdge[elem.first][elem.second.size() - 1] = aBaseEdge;
+							m_oldMapNewEdge[tarElem][aTarVectorNewEdges.size() - 1] = aTarEdge;
+						}
+					} 
+				}
+			}
+		}
+	}
+}
 void SheetFalttenMove::generate(TopoDS_Compound& aCompound)
 {
+	for (auto elem : m_ThreeToTwoEdge)
+	{
+		EdgeData aData;
+		aData.oldEdge_2d = elem.second;
+		m_ThreeToInformation[elem.first] = aData;
+	}
 	allReation2dEdge();
 	processOverlap();
 	allReation2dNewEdge();
@@ -1839,6 +1922,8 @@ void SheetFalttenMove::generate(TopoDS_Compound& aCompound)
 			}
 		}
 	}
+
+	processOutline();
 	/*makeLapelMap();
 	translateLapel(1.);
 	wrapAngle();*/
@@ -1896,13 +1981,19 @@ void SheetFalttenMove::generateMidleEdge(const vector<TopoDS_Edge> &theMoveEdge,
 			else {
 				tempedge = it;
 			}
-			TopoDS_Edge newedge;
+			TopoDS_Edge newedge,aSoltEdge1,aSoltEdge2;
 			if (m_slotEdges_2d.find(it) != m_slotEdges_2d.end())
 			{
 				newedge = TranslateEdge(tempedge, theTranslation_slot);
 			}
 			else
 			{
+				/*if (m_isPositiveFold)
+				{
+					TranslatePositiveEdge(tempedge, theTranslation, aSoltEdge1, aSoltEdge2);
+					m_positiveEdges.emplace_back(aSoltEdge1);
+					m_positiveEdges.emplace_back(aSoltEdge2);
+				}*/
 				newedge = TranslateEdge(tempedge, theTranslation);
 			}
 			TopoDS_Edge midedge = midleLine(tempedge, newedge);

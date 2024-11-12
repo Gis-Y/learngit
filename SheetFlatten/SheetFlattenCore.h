@@ -94,16 +94,23 @@ private:
 	IMeshTools_Parameters aMeshParams;
 
 	FlattenFaceNode rootNode;		// 这里定义这个变量是为了对应指定基准面展开时，交互定义
-
+	vector<FlattenFaceNode> m_vector_rootNodes;
 	tree< FlattenFaceNode> shapeTree;
+	vector< tree< FlattenFaceNode>> m_vector_shapTrees;
 	vector<FlattenFace> aFlattenFaces;
 
+	FlattenFace m_flat;
+	TopTools_IndexedMapOfShape faceMap;
 public:
 	SheetFalttenMove aFalttenMove;
 public:
+	vector<Standard_Integer> SoltListId;
+	vector<Standard_Integer> sliceListId;
+	set<TopoDS_Edge> mapSliceEdges;
 	map<TopoDS_Edge, set<TopoDS_Face> > mapEdgeAdjFaces;
 	map<TopoDS_Edge, double> mapFacesAngle;
 	set<TopoDS_Face> finishedFaces;
+	vector<TopoDS_Face> m_vector_AllFaces;
 	int faceid;
 	int refId;
 
@@ -145,6 +152,19 @@ inline int SheetFlattenCore::Perform()
 		BRepMesh_IncrementalMesh(objShape, aMeshParams);
 
 		BuildEdgeAdjFacesMap(objShape);
+		for (int i = 1; i <= faceMap.Extent(); ++i)
+		{
+			TopoDS_Edge edge = TopoDS::Edge(faceMap(i));
+			Standard_Integer id = faceMap.FindIndex(edge);
+			if (find(SoltListId.begin(), SoltListId.end(), i) != SoltListId.end())
+			{
+				aFalttenMove.m_slotEdges_3d.emplace_back(edge);
+			}
+			if (find(sliceListId.begin(), sliceListId.end(), i) != sliceListId.end())
+			{
+				mapSliceEdges.insert(edge);
+			}
+		}
 		BuildFacesAngleMap();
 		for (auto elem : mapEdgeAdjFaces)
 		{
@@ -168,10 +188,12 @@ inline void SheetFlattenCore::BuildEdgeAdjFacesMap(const TopoDS_Shape &objShape)
 {
 	for (TopExp_Explorer faceExp(objShape, TopAbs_FACE); faceExp.More(); faceExp.Next())
 	{
+		//faceMap.Add(faceExp.Current());
 		const TopoDS_Face& objFace = TopoDS::Face(faceExp.Current());
-
+		m_vector_AllFaces.emplace_back(objFace);
 		for (TopExp_Explorer edgeExp(objFace, TopAbs_EDGE); edgeExp.More(); edgeExp.Next())
 		{
+			faceMap.Add(edgeExp.Current());
 			const TopoDS_Edge& objEdge = TopoDS::Edge(edgeExp.Current());
 			set<TopoDS_Face> aFaces;
 			if (mapEdgeAdjFaces.find(objEdge) != mapEdgeAdjFaces.end())
@@ -315,7 +337,86 @@ inline bool SheetFlattenCore::CalculateAngleBetweenFaces(const TopoDS_Face& face
 inline bool SheetFlattenCore::BuildFlattenTree(const TopoDS_Shape& objShape)
 {
 	cout << "BuildFlattenTree..." << endl;
+
+	if (m_vector_AllFaces.size() > finishedFaces.size())
+	{
+		FlattenFaceNode aRootNode;
+		tree<FlattenFaceNode> aShapeTree;
+		m_vector_shapTrees.emplace_back(aShapeTree);
+		m_vector_rootNodes.emplace_back(aRootNode);
+		tree<FlattenFaceNode>& aShapeTree_ref = m_vector_shapTrees.back();
+		FlattenFaceNode& aRootNode_ref = m_vector_rootNodes.back();
+
+		// 如果没有指定root face，则找出面积最大的平面
+		if (aRootNode_ref.isNull())
+		{
+			// 找到面积最大的平面作为root face
+			double area = -1e6;
+			TopoDS_Face maxAreaFace;
+			for (TopExp_Explorer faceExp(objShape, TopAbs_FACE); faceExp.More(); faceExp.Next())
+			{
+				const TopoDS_Face& objFace = TopoDS::Face(faceExp.Current());
+				if (finishedFaces.find(objFace) != finishedFaces.end())
+				{
+					continue;
+				}
+				if (!isFacePlane(objFace))
+				{
+					continue;
+				}
+
+				// 定义变量来存储属性
+				GProp_GProps props;
+				// 计算面的属性
+				BRepGProp::SurfaceProperties(objFace, props);
+				// 获取面的面积
+
+				if (fabs(props.Mass()) > area)
+				{
+					maxAreaFace = objFace;
+					area = fabs(props.Mass());
+				}
+			}
+
+			aRootNode_ref.flattenFace.Init(maxAreaFace);
+		}
+
+		// 如果没有平面
+		if (aRootNode_ref.isNull())
+		{
+			return false;
+		}
+		else
+		{
+			aRootNode_ref.flattenFace.OneStepFlattenFace();
+
+			//rootNode.flattenFace.DumpNasEx("F:\\FaceInit_" + to_string(faceid) + ".nas", 0);
+
+			string nasFile = "E:\\FaceOnestep_" + to_string(faceid++) + ".nas";
+
+			//rootNode.flattenFace.DumpNasEx(nasFile, 1);
+		}
+
+		aRootNode_ref.id = ++refId;
+		tree<FlattenFaceNode>::iterator it = aShapeTree_ref.insert(aRootNode_ref);
+		finishedFaces.insert(aRootNode_ref.flattenFace.face);
+
+		BuildFlattenTreeNode(it);
+		BuildFlattenTree(objShape);
+		
+	}
+
+	for(auto elem :m_vector_shapTrees)
+	{
+		Jigsaw(elem.begin());
+
+		Fitting(elem.begin());
+	} 
+
+	SaveDxfFile saveFile;
+	saveFile.SaveDxf(m_flat.ai, m_flat.ai1, m_flat.ai2, "D:\\1_work\\test.dxf");
 	// 如果没有指定root face，则找出面积最大的平面
+	/*
 	if (rootNode.isNull())
 	{
 		// 找到面积最大的平面作为root face
@@ -382,6 +483,7 @@ inline bool SheetFlattenCore::BuildFlattenTree(const TopoDS_Shape& objShape)
 	Jigsaw(it);
 
 	Fitting(it);
+	*/
 	return true;
 }
 
@@ -467,7 +569,8 @@ inline void SheetFlattenCore::Fitting(tree<FlattenFaceNode>::iterator it)
 	{
 		cout << "CreateOutline" << endl;
 
-		lit.node()->get()->flattenFace.CreateOutline(aCompound,flat, aFalttenMove.m_ThreeToTwoEdge);
+		//lit.node()->get()->flattenFace.CreateOutline(aCompound,flat, aFalttenMove.m_ThreeToTwoEdge);
+		lit.node()->get()->flattenFace.CreateOutline(aCompound, m_flat, aFalttenMove.m_ThreeToTwoEdge);
 		for (auto it : aFalttenMove.m_ThreeToTwoEdge)
 		{
 			aFalttenMove.m_TwoToThreeEdge[it.second] = it.first;

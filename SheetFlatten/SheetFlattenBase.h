@@ -384,11 +384,13 @@ private:
 	set<int> edgeNodes;	//存储更新完ID的边界节点
 	gp_Pnt cogOnestep;
 	gp_Pnt2d cogPlane;
+	int jigsawStartNodeId, jigsawEndNodeId;
+
+public:
 	std::vector<std::tuple<point_t, point_t, std::string>> ai;
 	std::vector<std::tuple<point_t, double, std::string>> ai1;
 	std::vector< std::tuple< point_t, double, double, double, std::string > > ai2;
 
-	int jigsawStartNodeId, jigsawEndNodeId;
 public:
 
 	MAP<TopoDS_Edge, TColStd_Array1OfInteger>edges;
@@ -1051,7 +1053,7 @@ public:
 
 	void CreateOutline(TopoDS_Compound &aCompound , FlattenFace & flat , map<TopoDS_Edge, TopoDS_Edge > &NewMapEdgeAdjEdge)
 	{
-		SaveDxfFile saveFile;
+		//SaveDxfFile saveFile;
 		double offset = M_PI;
 		string str = "0";
 		BRep_Builder aBuilder;
@@ -1093,7 +1095,7 @@ public:
 			//saveFile.SaveDxf(ai, ai1, ai2, "D:\\1_work\\test.dxf");
 			delete sheetFlatFit;
 		}
-		saveFile.SaveDxf(flat.ai, flat.ai1, flat.ai2, "D:\\1_work\\test.dxf");
+		//saveFile.SaveDxf(flat.ai, flat.ai1, flat.ai2, "D:\\1_work\\test.dxf");
 	}
 
 	bool IsLine(TColStd_Array1OfInteger aEdge)

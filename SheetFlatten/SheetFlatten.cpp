@@ -11,8 +11,11 @@ int main()
 	/*std::vector<std::tuple<point_t, point_t, std::string>> ai;
 	std::vector<std::tuple<point_t, double, std::string>> ai1;
 	std::vector< std::tuple< point_t, double, double, double, std::string > > ai2;*/
-
+	vector<Standard_Integer> SoltListId;
+	vector<Standard_Integer> sliceListId;
 	SheetFlattenCore* core = new SheetFlattenCore();
+	core->sliceListId = sliceListId;
+	core->SoltListId = SoltListId;
 	TopoDS_Compound aCompound1,aCompound2;
 	FlattenFace flat;
 	BRep_Builder aBuilder;
