@@ -35,6 +35,7 @@ public:
 	~SheetFlattenProcess();
 
 private:
+	void processEdges_WrapAngle();
 	void QuirySplitEdge();
 	void processSameFaceEdgeRelation();
 	bool isOverlap(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
@@ -50,7 +51,7 @@ private:
 	TopoDS_Edge TranslateEdge(const TopoDS_Edge& edge, const gp_Trsf& translation);
 	bool CalculateAngleBetweenFaces(const vector<TopoDS_Face>& face, double& angle);
 	bool CalculateAngleBetweenFaces(const TopoDS_Face& theBaseFace, const TopoDS_Face& theTarFace, double& angle);
-	void moveEdge(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& edge, TopoDS_Compound& aCompound);
+	void moveEdge(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& edge);
 	void processOverlap();
 	TopoDS_Edge findAdjEdge(const TopoDS_Edge &baseEdge, const vector<TopoDS_Edge> &interEdges, const gp_Pnt &basePoint);
 	void generateMidleEdge(const vector<TopoDS_Edge>& theMoveEdge, const gp_Trsf& translation, const gp_Trsf& theTranslation_slot);
@@ -2115,7 +2116,7 @@ void SheetFlattenProcess::check()
 			{
 				for (auto it : aEdges)
 				{
-					//aBuilder.Add(aCompound, it);
+					aBuilder.Add(aCompound, it);
 				}
 			}
 			else
@@ -2132,6 +2133,60 @@ void SheetFlattenProcess::check()
 	}
 	FlattenFace::BuildDocStd(aCompound);
 }
+
+void SheetFlattenProcess::processEdges_WrapAngle() {
+	// 遍历每组数据
+	for (auto& baseGroup : m_EdgeData) {
+		for (auto& targetGroup : m_EdgeData) {
+			// 如果是同一个分组，跳过
+			if (&baseGroup == &targetGroup) continue;
+
+			// 遍历基础边
+			for (auto& base : baseGroup) {
+				// 如果基础边已处理过，跳过
+				if (base.isProcessWrapAngle()) continue;
+
+				// 遍历目标边
+				for (auto& target : targetGroup) {
+					// 如果目标边已处理过或两边端点不同，跳过
+					if (target.isProcessWrapAngle() ||
+						!AreEdgesSameEndpoints(base.getEdge_3d(), target.getEdge_3d())) {
+						continue;
+					}
+
+					// 获取基础边和目标边的面数据
+					const auto& baseFaces = base.getVector_face();
+					const auto& targetFaces = target.getVector_face();
+
+					// 如果任意边的关联面数量 >= 2，跳过
+					if (baseFaces.size() >= 2 || targetFaces.size() >= 2) continue;
+
+					// 计算两边的夹角
+					double angle = 0.0;
+					CalculateAngleBetweenFaces(baseFaces[0], targetFaces[0], angle);
+
+					// 更新基础边和目标边的数据
+					base.setAngle(angle);
+					base.setProcessWrapAngle(true);
+
+					target.setProcessWrapAngle(true);
+					target.setWrapAngle(true);
+					target.setAngle(angle);
+				}
+			}
+		}
+
+		// 移动尚未完成的边
+		for (auto& edge : baseGroup) {
+			if (!edge.isFinish()) {
+				moveEdge(baseGroup, edge);
+			}
+		}
+	}
+}
+
+
+
 void SheetFlattenProcess::generate(TopoDS_Compound& aCompound)
 {
 	allReation2dEdge();
@@ -2139,24 +2194,8 @@ void SheetFlattenProcess::generate(TopoDS_Compound& aCompound)
 	processOverlap();
 	allReation2dNewEdge();
 
-	//for (auto elem : m_MapEdgeAdjFaces)
-	//{
-	//	if (m_finishEdge.find(elem.first) == m_finishEdge.end())
-	//	{
-	//		moveEdge( elem.first, aCompound);
-	//		//core->aFalttenMove.generateEdge();
-	//	}
-	//}
-	for (auto &elem : m_EdgeData)
-	{
-		for (auto &it : elem)
-		{
-			if (!it.isFinish())
-			{
-				moveEdge(elem,it, aCompound);
-			}
-		}
-	}
+
+	processEdges_WrapAngle();
 	check();
 	//for (auto elem : m_ThreeToTwoEdge)
 	//{
@@ -2300,7 +2339,7 @@ void SheetFlattenProcess::generateMidleEdge(const vector<TopoDS_Edge>& theMoveEd
 		}
 	}
 }
-void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlattenEdgeData &edge, TopoDS_Compound& aCompound)
+void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlattenEdgeData &edge)
 {
 	BRep_Builder aBuilder;
 	vector<TopoDS_Edge> leftEdges;
