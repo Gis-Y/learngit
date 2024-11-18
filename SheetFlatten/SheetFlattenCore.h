@@ -375,12 +375,8 @@ void SheetFlattenCore::process()
 				m_EdgeData.setAngle(angle);
 				if (angle < M_PI)
 				{
-					m_EdgeData.setPositiveBend(true);
+					m_EdgeData.setNegativeBend(true);
 				}
-			}
-			if (mapFacesAngle.find(elem.first) != mapFacesAngle.end())
-			{
-				m_EdgeData.setAngle(mapFacesAngle.find(elem.first)->second);
 			}
 			if (m_mapSoltEdges.find(elem.first) != m_mapSoltEdges.end())
 			{
