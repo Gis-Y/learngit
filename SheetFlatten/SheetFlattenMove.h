@@ -27,7 +27,7 @@
 #include <GeomLProp_SLProps.hxx>
 
 
-
+#include "SheetFlattenEdgeData.h"
 #include "ModelIO/ModelIO.h"
 #include "tcl_5.0.6/tree.h"
 #include "SheetFlattenBase.h"
@@ -43,28 +43,7 @@ typedef struct interseLine_Line
 	vector<TopoDS_Edge> interseLine;
 	vector<TopoDS_Edge> Line;
 };
-struct EdgeData
-{
-	
-	TopoDS_Edge oldEdge_2d;
-	vector<TopoDS_Edge> vector_newEdge_2d;
-	vector<TopoDS_Face> vector_face;
-	vector<TopoDS_Edge> vector_interseEdge_sameFace_2d;//共面且相交
-	vector<TopoDS_Edge> vector_interseEdge_2d;//只相交，无所谓共面
-	vector<TopoDS_Edge> vector_sameFaceEdge_2d;//共面但不相交
-	vector<TopoDS_Edge> vector_interseEdge_new2d;//共面且相交判断条件在新二维的基础上
-	bool bMidleEdge;
-	bool bOverlapeEdge;
-	bool bSoltEdge;
-	double angle;
-	TopoDS_Edge ContourEdge;
-	gp_Pnt overLapEdge_Point;
 
-	EdgeData()
-		:bMidleEdge(false),bOverlapeEdge(false),bSoltEdge(false),angle(0.)
-	{
-	}
-};
 
 class SheetFalttenMove
 {
@@ -118,7 +97,7 @@ public:
 	//void getRefDir(const TopoDS_Edge& edge);
 public:
 	TopTools_IndexedMapOfShape faceMap;
-	map<TopoDS_Edge,EdgeData> m_ThreeToInformation;
+	vector<SheetFlattenEdgeData> m_EdgeData;
 	map<TopoDS_Edge, vector<TopoDS_Face> > m_MapEdgeAdjFaces;
 	map<TopoDS_Edge, TopoDS_Edge> m_ThreeToTwoEdge;
 	map<TopoDS_Edge, TopoDS_Edge> m_TwoToThreeEdge;
@@ -1475,8 +1454,6 @@ void SheetFalttenMove::allReation2dEdge()
 			}
 		}
 		m_MapInterseLines[baseEdge] = interseEdges;
-		auto aData = m_ThreeToInformation.find(it.first);
-		aData->second.vector_interseEdge_2d = interseEdges;
 		interseEdges.clear();
 	}
 }
@@ -1509,8 +1486,6 @@ void SheetFalttenMove::allReation2dNewEdge()
 				}
 			}
 		}
-		auto aData = m_ThreeToInformation.find(it.first);
-		aData->second.vector_interseEdge_new2d = interseEdges;
 		m_MapInterseNewLines[it.second] = interseEdges;
 		interseEdges.clear();
 	}
@@ -1858,12 +1833,6 @@ void SheetFalttenMove::processOutline()
 }
 void SheetFalttenMove::generate(TopoDS_Compound& aCompound)
 {
-	for (auto elem : m_ThreeToTwoEdge)
-	{
-		EdgeData aData;
-		aData.oldEdge_2d = elem.second;
-		m_ThreeToInformation[elem.first] = aData;
-	}
 	allReation2dEdge();
 	processOverlap();
 	allReation2dNewEdge();

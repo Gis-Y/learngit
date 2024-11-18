@@ -146,9 +146,11 @@
   <ItemGroup>
     <ClInclude Include="SheetFlattenBase.h" />
     <ClInclude Include="SheetFlattenCore.h" />
+    <ClInclude Include="SheetFlattenEdgeData.h" />
     <ClInclude Include="SheetFlattenFitting.h" />
     <ClInclude Include="SheetFlattenMove.h" />
     <ClInclude Include="SheetFlattenOnestep.h" />
+    <ClInclude Include="SheetFlattenProcess.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -28,11 +28,14 @@
 #include <ProjLib.hxx>
 #include <IntAna2d_AnaIntersection.hxx>
 
+
 #include "ModelIO/ModelIO.h"
 #include "tcl_5.0.6/tree.h"
 #include "SheetFlattenBase.h"
 #include "SheetFlattenFitting.h"
 #include "SheetFlattenMove.h"
+#include"SheetFlattenEdgeData.h"
+#include"SheetFlattenProcess.h"
 
 #include <iostream>
 #include <vector>
@@ -75,6 +78,7 @@ private:
 	void BuildEdgeAdjFacesMap(const TopoDS_Shape &objShape);
 	void BuildFacesAngleMap();
 	bool BuildFlattenTree(const TopoDS_Shape& objShape);
+	void process();
 	bool isFacePlane(const TopoDS_Face& face);
 	void BuildFlattenTreeNode(tree<FlattenFaceNode>::iterator it);
 	void Jigsaw(tree<FlattenFaceNode>::iterator fatherIt);
@@ -101,12 +105,21 @@ private:
 
 	FlattenFace m_flat;
 	TopTools_IndexedMapOfShape faceMap;
+	map<TopoDS_Edge, pair<int, int>> m_EdgeToEdgeDataIndex;
+	map<TopoDS_Edge, pair<int, int>> m_3dEdgeToEdgeDataIndex;
+
 public:
+	SheetFlattenProcess  m_process;
+	map<TopoDS_Edge, TopoDS_Edge > m_m3dTo2d;
+	vector<vector<SheetFlattenEdgeData>> m_vEdgeDatas;
+	vector<SheetFlattenEdgeData> m_EdgeDatas;
+	SheetFlattenEdgeData m_EdgeData;
 	SheetFalttenMove aFalttenMove;
 public:
-	vector<Standard_Integer> SoltListId;
-	vector<Standard_Integer> sliceListId;
-	set<TopoDS_Edge> mapSliceEdges;
+	vector<Standard_Integer> m_SoltListId;
+	vector<Standard_Integer> m_SplitListId;
+	set<TopoDS_Edge> m_mapSplitEdges;
+	set<TopoDS_Edge> m_mapSoltEdges;
 	map<TopoDS_Edge, set<TopoDS_Face> > mapEdgeAdjFaces;
 	map<TopoDS_Edge, double> mapFacesAngle;
 	set<TopoDS_Face> finishedFaces;
@@ -155,14 +168,15 @@ inline int SheetFlattenCore::Perform()
 		for (int i = 1; i <= faceMap.Extent(); ++i)
 		{
 			TopoDS_Edge edge = TopoDS::Edge(faceMap(i));
-			Standard_Integer id = faceMap.FindIndex(edge);
-			if (find(SoltListId.begin(), SoltListId.end(), i) != SoltListId.end())
+			Standard_Integer id = faceMap.FindIndex(faceMap(i));
+			if (find(m_SoltListId.begin(), m_SoltListId.end(), id) != m_SoltListId.end())
 			{
+				m_mapSoltEdges.insert(edge);
 				aFalttenMove.m_slotEdges_3d.emplace_back(edge);
 			}
-			if (find(sliceListId.begin(), sliceListId.end(), i) != sliceListId.end())
+			if (find(m_SplitListId.begin(), m_SplitListId.end(), id) != m_SplitListId.end())
 			{
-				mapSliceEdges.insert(edge);
+				m_mapSplitEdges.insert(edge);
 			}
 		}
 		BuildFacesAngleMap();
@@ -175,7 +189,10 @@ inline int SheetFlattenCore::Perform()
 		if (!BuildFlattenTree(objShape))
 		{
 			return 1;	// 没有root face
-		}		
+		}
+		else {
+			process();
+		}
 	}
 
 	return 0;
@@ -334,6 +351,64 @@ inline bool SheetFlattenCore::CalculateAngleBetweenFaces(const TopoDS_Face& face
 	return true;
 }
 
+void SheetFlattenCore::process()
+{
+	int i = -1, j = -1;
+	for (auto elem : m_vector_shapTrees)
+	{
+		++i;
+		Jigsaw(elem.begin());
+
+		Fitting(elem.begin());
+		for (auto elem : m_m3dTo2d)
+		{
+			++j;
+			m_EdgeData.setEdge_3d(elem.first);
+			if (mapEdgeAdjFaces.find(elem.first) != mapEdgeAdjFaces.end())
+			{
+				vector<TopoDS_Face> aFaces(mapEdgeAdjFaces.find(elem.first)->second.begin(), mapEdgeAdjFaces.find(elem.first)->second.end());
+				m_EdgeData.setVector_face(aFaces);
+			}
+			if (mapFacesAngle.find(elem.first) != mapFacesAngle.end())
+			{
+				double angle = mapFacesAngle.find(elem.first)->second;
+				m_EdgeData.setAngle(angle);
+				if (angle < M_PI)
+				{
+					m_EdgeData.setPositiveBend(true);
+				}
+			}
+			if (mapFacesAngle.find(elem.first) != mapFacesAngle.end())
+			{
+				m_EdgeData.setAngle(mapFacesAngle.find(elem.first)->second);
+			}
+			if (m_mapSoltEdges.find(elem.first) != m_mapSoltEdges.end())
+			{
+				m_EdgeData.setSoltEdge(true);
+			}
+			if (m_mapSplitEdges.find(elem.first) != m_mapSplitEdges.end())
+			{
+				m_EdgeData.setSplitEdge(true);
+			}
+			m_EdgeData.setOldEdge_2d(elem.second);
+			m_EdgeDatas.emplace_back(m_EdgeData);
+			m_EdgeData.clear();
+			m_EdgeToEdgeDataIndex[elem.second] = make_pair(i, j);
+			m_3dEdgeToEdgeDataIndex[elem.first] = make_pair(i, j);
+		}
+		j = -1;
+		m_vEdgeDatas.emplace_back(m_EdgeDatas);
+		m_EdgeDatas.clear();
+		m_m3dTo2d.clear();
+	}
+
+	m_process.set3dEdgeIndex(m_3dEdgeToEdgeDataIndex);
+	m_process.setEdgeData(m_vEdgeDatas);
+	m_process.setOldEdgeIndex(m_EdgeToEdgeDataIndex);
+	SaveDxfFile saveFile;
+	saveFile.SaveDxf(m_flat.ai, m_flat.ai1, m_flat.ai2, "D:\\1_work\\test.dxf");
+}
+
 inline bool SheetFlattenCore::BuildFlattenTree(const TopoDS_Shape& objShape)
 {
 	cout << "BuildFlattenTree..." << endl;
@@ -405,16 +480,59 @@ inline bool SheetFlattenCore::BuildFlattenTree(const TopoDS_Shape& objShape)
 		BuildFlattenTree(objShape);
 		
 	}
-
+	/*int i = -1, j = -1;
 	for(auto elem :m_vector_shapTrees)
 	{
+		++i;
 		Jigsaw(elem.begin());
 
 		Fitting(elem.begin());
+		for (auto elem : m_m3dTo2d)
+		{
+			++j;
+			m_EdgeData.setEdge_3d(elem.first);
+			if (mapEdgeAdjFaces.find(elem.first) != mapEdgeAdjFaces.end())
+			{
+				vector<TopoDS_Face> aFaces(mapEdgeAdjFaces.find(elem.first)->second.begin(), mapEdgeAdjFaces.find(elem.first)->second.end());
+				m_EdgeData.setVector_face(aFaces);
+			}
+			if (mapFacesAngle.find(elem.first) != mapFacesAngle.end())
+			{
+				double angle = mapFacesAngle.find(elem.first)->second;
+				m_EdgeData.setAngle(angle);
+				if (angle < M_PI)
+				{
+					m_EdgeData.setPositiveBend(true);
+				}
+			}
+			if (mapFacesAngle.find(elem.first) != mapFacesAngle.end())
+			{
+				m_EdgeData.setAngle(mapFacesAngle.find(elem.first)->second);
+			}
+			if (m_mapSoltEdges.find(elem.first) != m_mapSoltEdges.end())
+			{
+				m_EdgeData.setSoltEdge(true);
+			}
+			if (m_mapSplitEdges.find(elem.first) != m_mapSplitEdges.end())
+			{
+				m_EdgeData.setSplitEdge(true);
+			}
+			m_EdgeData.setOldEdge_2d(elem.second);
+			m_EdgeDatas.emplace_back(m_EdgeData);
+			m_EdgeData.clear();
+			m_EdgeToEdgeDataIndex[elem.second] = make_pair(i, j);
+			m_3dEdgeToEdgeDataIndex[elem.first] = make_pair(i, j);
+		}
+		j = -1;
+		m_vEdgeDatas.emplace_back(m_EdgeDatas);
+		m_EdgeDatas.clear();
+		m_m3dTo2d.clear();
 	} 
 
+	m_process.setEdgeData(m_vEdgeDatas);
+	m_process.setOldEdgeIndex(m_EdgeToEdgeDataIndex);
 	SaveDxfFile saveFile;
-	saveFile.SaveDxf(m_flat.ai, m_flat.ai1, m_flat.ai2, "D:\\1_work\\test.dxf");
+	saveFile.SaveDxf(m_flat.ai, m_flat.ai1, m_flat.ai2, "D:\\1_work\\test.dxf");*/
 	// 如果没有指定root face，则找出面积最大的平面
 	/*
 	if (rootNode.isNull())
@@ -569,8 +687,8 @@ inline void SheetFlattenCore::Fitting(tree<FlattenFaceNode>::iterator it)
 	{
 		cout << "CreateOutline" << endl;
 
-		//lit.node()->get()->flattenFace.CreateOutline(aCompound,flat, aFalttenMove.m_ThreeToTwoEdge);
-		lit.node()->get()->flattenFace.CreateOutline(aCompound, m_flat, aFalttenMove.m_ThreeToTwoEdge);
+		//lit.node()->get()->flattenFace.CreateOutline(aCompound,m_flat, aFalttenMove.m_ThreeToTwoEdge);
+		lit.node()->get()->flattenFace.CreateOutline(aCompound, m_flat, m_m3dTo2d);
 		for (auto it : aFalttenMove.m_ThreeToTwoEdge)
 		{
 			aFalttenMove.m_TwoToThreeEdge[it.second] = it.first;

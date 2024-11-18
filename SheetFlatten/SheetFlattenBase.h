@@ -1073,13 +1073,6 @@ public:
 
 			if (sheetFlatFit->Perform(aPoints, fitCurve) >= 0)
 			{
-				/*TopoDS_Edge edges;
-				if (NewMapEdgeAdjEdge.find(item.first) != NewMapEdgeAdjEdge.end())
-				{
-					edges = NewMapEdgeAdjEdge.find(item.first)->second;
-				}
-				aBuilder.Add(aCompound, fitCurve.edge);
-				NewMapEdgeAdjEdge[item.first] = edges;*/
 				NewMapEdgeAdjEdge[item.first] = fitCurve.edge;
 			}
 			gp_Pnt2d p1 = std::get<0>(fitCurve.line);

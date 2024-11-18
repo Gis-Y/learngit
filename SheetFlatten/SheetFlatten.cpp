@@ -14,8 +14,8 @@ int main()
 	vector<Standard_Integer> SoltListId;
 	vector<Standard_Integer> sliceListId;
 	SheetFlattenCore* core = new SheetFlattenCore();
-	core->sliceListId = sliceListId;
-	core->SoltListId = SoltListId;
+	core->m_SplitListId = sliceListId;
+	core->m_SoltListId = SoltListId;
 	TopoDS_Compound aCompound1,aCompound2;
 	FlattenFace flat;
 	BRep_Builder aBuilder;
@@ -25,9 +25,30 @@ int main()
 	{
 		core->Perform();
 		TopoDS_Edge baseEdge;
-		core->aFalttenMove.generate(aCompound2);
+		core->m_process.generate(aCompound2);
+		//core->aFalttenMove.generate(aCompound2);
 
-		for (auto it : core->aFalttenMove.m_ThreeToTwoEdge)
+		for (auto elem : core->m_process.m_EdgeData)
+		{
+			for (auto item : elem)
+			{
+				TopoDS_Edge edge;
+				vector<TopoDS_Edge> aEdges;
+				if (item.getVector_newEdge_2d(aEdges))
+				{
+					for (auto elem : aEdges)
+					{
+						aBuilder.Add(aCompound1, elem);
+					}
+				}
+				else
+				{
+					aBuilder.Add(aCompound1, edge);
+				}
+			}
+		}
+
+		/*for (auto it : core->aFalttenMove.m_ThreeToTwoEdge)
 		{
 			TopoDS_Edge edge;
 			vector<TopoDS_Edge> aEdges;
@@ -44,7 +65,7 @@ int main()
 			{
 				aBuilder.Add(aCompound1, edge);
 			}
-		}
+		}*/
 		FlattenFace::BuildDocStd(aCompound1);
 		delete core;
 
