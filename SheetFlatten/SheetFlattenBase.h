@@ -646,20 +646,8 @@ public:
 		for (TopExp_Explorer edgeExp(face, TopAbs_EDGE); edgeExp.More(); edgeExp.Next())
 		{
 			const TopoDS_Edge& objEdge = TopoDS::Edge(edgeExp.Current());
-			//TopLoc_Location location;
 
-			//opencascade::handle<Poly_PolygonOnTriangulation> triEdge = BRep_Tool::PolygonOnTriangulation(objEdge, triFace, location);
-
-			//if (triEdge.IsNull())
-			//{
-			//	continue;
-			//}
-			//edgesHash.insert(make_pair(hash<TopoDS_Edge>{}(objEdge), nodes));
 			const TColStd_Array1OfInteger& nds = edgesHash[hash<TopoDS_Edge>{}(objEdge)];
-
-			//const TColStd_Array1OfInteger& nds = triEdge->Nodes();
-
-			//Transform2ZPlane(objEdge, nodes[nds[1]], nodes[nds.Size()], true);
 
 			n1 = nds[1];
 			n2 = nds.Size();
@@ -675,8 +663,61 @@ public:
 		gp_Vec v1(flatNodes[n2].x - flatNodes[n1].x, flatNodes[n2].y - flatNodes[n1].y, flatNodes[n2].z - flatNodes[n1].z);
 		gp_Vec v2(cogOnestep.X() - flatNodes[n1].x, cogOnestep.Y() - flatNodes[n1].y, cogOnestep.Z() - flatNodes[n1].z);
 
+		// 获取面的法向量
+		Handle(Geom_Surface) surfaceBase = BRep_Tool::Surface(face);
+		GeomLProp_SLProps propsBase(surfaceBase, 0.5, 0.5, 1, Precision::Confusion());
+		gp_Dir normalBase = propsBase.Normal();
+
+
+		/*
+		gp_Dir zAxis(0, 0, 1);
+		if (normalBase.IsEqual(zAxis, Precision::Angular())) {
+			std::cout << "Face is already aligned with Z-axis." << std::endl;
+			return;
+		}
+
+
+		// 计算旋转轴和角度
+		gp_Vec rotationAxis = normalBase ^ zAxis; // 法向量和 Z 轴的叉积，定义旋转轴
+		double angle = normalBase.Angle(zAxis);  // 计算夹角
+
+		// 如果法向量与 Z 轴完全反向
+		if (normalBase.IsOpposite(zAxis, Precision::Angular())) {
+			rotationAxis = gp_Vec(1, 0, 0); // 默认以 X 轴作为旋转轴
+			angle = M_PI;                  // 旋转 180°
+		}
+		// 创建旋转变换
+		gp_Trsf rotationTransform;
+		gp_Ax1 rotationAx1(gp_Pnt(0, 0, 0), rotationAxis); // 旋转轴通过原点
+		rotationTransform.SetRotation(rotationAx1, angle);
+
+		for (auto it = flatNodes.begin(); it != flatNodes.end(); it++)
+		{
+			gp_Pnt vn(it->second.x, it->second.y, it->second.z);
+			gp_Pnt vnt = vn.Transformed(rotationTransform);
+			planeNodes.insert(make_pair(it->first, gp_Pnt2d(vnt.X(), vnt.Y())));
+		}
+		// 平移到原点
+		gp_Pnt2d baseNode(planeNodes.begin()->second.X(), planeNodes.begin()->second.Y());
+		for (auto it = planeNodes.begin(); it != planeNodes.end(); it++)
+		{
+			it->second.SetX(it->second.X() - baseNode.X());
+			it->second.SetY(it->second.Y() - baseNode.Y());
+		}
+
+		jigsawNodes = planeNodes;
+
+		GetPlaneCOG();
+		*/
+
+
+
+
+
 		gp_Vec vo = v1 ^ v2;
 		vo.Normalize();
+		normalBase;
+		//vo = normalBase;
 		gp_Vec vz(0, 0, 1);
 		gp_Vec vt;
 
@@ -731,7 +772,7 @@ public:
 		jigsawNodes = planeNodes;
 
 		GetPlaneCOG();
-
+		
 	}
 
 	void Transform2ZPlane(const TopoDS_Edge &e, const Node &fatherStartNode, const Node& fatherEndNode, const FaceOrientation &fatherFaceOri)
@@ -939,6 +980,10 @@ public:
 		gp_Vec v2(cogPlane.X() - planeNodes[n1].X(), cogPlane.Y() - planeNodes[n1].Y(), 0);
 		gp_Vec vo = v1 ^ v2;
 
+
+		/*Handle(Geom_Surface) surfaceBase = BRep_Tool::Surface(face);
+		GeomLProp_SLProps propsBase(surfaceBase, 0.5, 0.5, 1, Precision::Confusion());
+		gp_Dir normalBase = propsBase.Normal();*/
 		vo.Normalize();
 
 		if (vo.Z() > 0)

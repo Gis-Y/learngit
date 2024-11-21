@@ -661,7 +661,6 @@ inline void SheetFlattenCore::Jigsaw(tree<FlattenFaceNode>::iterator fatherIt)
 		FlattenFaceNode* fatherFlattenNode = lit.node()->parent()->get();
 		fatherFlattenNode->ParseNode(lit.node()->get()->edge);
 		lit.node()->get()->flattenFace.Transform2ZPlane(lit.node()->get()->edge, fatherFlattenNode->StartNode(), fatherFlattenNode->EndNode(), fatherFlattenNode->GetPlaneOrientation());
-
 		//lit.node()->get()->flattenFace.DumpNasEx("F:\\Face2ZPlane_" + to_string(faceid) + ".nas", 2);
 
 		lit.node()->get()->flattenFace.Jigsaw(fatherFlattenNode->StartNode2D(), fatherFlattenNode->EndNode2D());

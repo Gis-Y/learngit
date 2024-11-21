@@ -36,6 +36,16 @@ public:
 
 
     // Getter and Setter for vector_newEdge_2d
+    TopoDS_Edge getNewEdge_2d()
+    {
+        if (m_vector_newEdge_2d.size() < 1)
+        {
+          
+            return m_oldEdge_2d;
+
+        }
+        return m_vector_newEdge_2d.back();
+    }
     bool getVector_newEdge_2d(vector<TopoDS_Edge>& base) 
     {
         if (m_vector_newEdge_2d.size() < 1)
@@ -50,7 +60,7 @@ public:
     }
     bool getVector_newEdge_2d(TopoDS_Edge &base) { if (m_vector_newEdge_2d.size() < 1)return false; base = m_vector_newEdge_2d.back(); return true; }
     const vector<TopoDS_Edge>& getVector_newEdge_2d() const { return  m_vector_newEdge_2d; }
-    void setVector_newEdge_2d(const vector<TopoDS_Edge>& edges) { m_vector_newEdge_2d = edges; }
+    void setVector_newEdge_2d(const vector<TopoDS_Edge>& data) { m_vector_newEdge_2d = data; }
 
     // Getter and Setter for vector_face
     vector<TopoDS_Face> getVector_face() { return  m_vector_face; }
