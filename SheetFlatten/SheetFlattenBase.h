@@ -44,6 +44,7 @@
 #include <BRep_CurveRepresentation.hxx>
 #include <BRep_PolygonOnTriangulation.hxx>
 
+#include<BRepGProp_Face.hxx>
 #include <gp_Pnt2d.hxx>
 #include <gp_Trsf.hxx>
 #include <Geom2dAPI_Interpolate.hxx>
@@ -634,6 +635,39 @@ public:
 		return ret;
 	}
 
+	bool CheckNorm(const int& n1, const int& n2)
+	{
+		// 获取曲面中心法线
+		if (face.Orientation() == TopAbs_REVERSED) {
+			face.Reversed();
+		}
+		BRepGProp_Face analysisFace(face);
+		Standard_Real umin, umax, vmin, vmax;
+		analysisFace.Bounds(umin, umax, vmin, vmax);
+		Standard_Real midU = (umin + umax) / 2;
+		Standard_Real midV = (vmin + vmax) / 2;
+		gp_Vec norm;
+		gp_Pnt midPoint;
+		analysisFace.Normal(midU, midV, midPoint, norm);
+
+		//对比两个方向
+
+		gp_Vec v1(nodes[n2].x - nodes[n1].x, nodes[n2].y - nodes[n1].y, nodes[n2].z - nodes[n1].z);
+		gp_Vec v2(midPoint.X() - nodes[n1].x, midPoint.Y() - nodes[n1].y, midPoint.Z() - nodes[n1].z);
+
+		gp_Vec vo = v1 ^ v2;
+		vo.Normalize();
+
+		if (norm.Angle(vo) > M_PI_2)
+		{
+			return false;
+		}
+		else
+		{
+			return true;
+		}
+	}
+
 	void Transform2ZPlane()
 	{
 		TopLoc_Location location;
@@ -663,60 +697,14 @@ public:
 		gp_Vec v1(flatNodes[n2].x - flatNodes[n1].x, flatNodes[n2].y - flatNodes[n1].y, flatNodes[n2].z - flatNodes[n1].z);
 		gp_Vec v2(cogOnestep.X() - flatNodes[n1].x, cogOnestep.Y() - flatNodes[n1].y, cogOnestep.Z() - flatNodes[n1].z);
 
-		// 获取面的法向量
-		Handle(Geom_Surface) surfaceBase = BRep_Tool::Surface(face);
-		GeomLProp_SLProps propsBase(surfaceBase, 0.5, 0.5, 1, Precision::Confusion());
-		gp_Dir normalBase = propsBase.Normal();
-
-
-		/*
-		gp_Dir zAxis(0, 0, 1);
-		if (normalBase.IsEqual(zAxis, Precision::Angular())) {
-			std::cout << "Face is already aligned with Z-axis." << std::endl;
-			return;
-		}
-
-
-		// 计算旋转轴和角度
-		gp_Vec rotationAxis = normalBase ^ zAxis; // 法向量和 Z 轴的叉积，定义旋转轴
-		double angle = normalBase.Angle(zAxis);  // 计算夹角
-
-		// 如果法向量与 Z 轴完全反向
-		if (normalBase.IsOpposite(zAxis, Precision::Angular())) {
-			rotationAxis = gp_Vec(1, 0, 0); // 默认以 X 轴作为旋转轴
-			angle = M_PI;                  // 旋转 180°
-		}
-		// 创建旋转变换
-		gp_Trsf rotationTransform;
-		gp_Ax1 rotationAx1(gp_Pnt(0, 0, 0), rotationAxis); // 旋转轴通过原点
-		rotationTransform.SetRotation(rotationAx1, angle);
-
-		for (auto it = flatNodes.begin(); it != flatNodes.end(); it++)
-		{
-			gp_Pnt vn(it->second.x, it->second.y, it->second.z);
-			gp_Pnt vnt = vn.Transformed(rotationTransform);
-			planeNodes.insert(make_pair(it->first, gp_Pnt2d(vnt.X(), vnt.Y())));
-		}
-		// 平移到原点
-		gp_Pnt2d baseNode(planeNodes.begin()->second.X(), planeNodes.begin()->second.Y());
-		for (auto it = planeNodes.begin(); it != planeNodes.end(); it++)
-		{
-			it->second.SetX(it->second.X() - baseNode.X());
-			it->second.SetY(it->second.Y() - baseNode.Y());
-		}
-
-		jigsawNodes = planeNodes;
-
-		GetPlaneCOG();
-		*/
-
-
-
-
-
 		gp_Vec vo = v1 ^ v2;
 		vo.Normalize();
-		normalBase;
+
+		if (!CheckNorm(n1, n2))
+		{
+			vo = -vo;
+		}
+
 		//vo = normalBase;
 		gp_Vec vz(0, 0, 1);
 		gp_Vec vt;

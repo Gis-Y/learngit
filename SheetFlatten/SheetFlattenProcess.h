@@ -2338,17 +2338,17 @@ double CalculateClockwiseAngle(const gp_Vec& vec1, const gp_Vec& vec2, const gp_
 	{
 		return 0.;
 	}
-	else if (fabs(angle - 0.) < 1e-6)
+	else if (fabs(angle - 0.) < 1e-2)
 	{
 		return M_PI;
 	}
 	else if (angle > M_PI)
 	{
-		angle = M_PI + baseAngle;
+		angle =3* M_PI - angle;
 	}
 	else if (angle < M_PI)
 	{
-		angle = M_PI - baseAngle;
+		angle = M_PI - angle;
 	}
 
 	return angle; // 返回值范围 [0, 2π]
@@ -2371,9 +2371,48 @@ TopoDS_Edge RotateEdge(const TopoDS_Edge& edge, double angleInDegrees) {
 	return TopoDS::Edge(transformer.Shape());
 }
 
+bool AreEdgesParallel(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, double tolerance = Precision::Confusion()) {
+	// 获取两条边的几何曲线
+	Standard_Real f1, l1, f2, l2;
+	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, f1, l1);
+	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, f2, l2);
+
+	if (curve1.IsNull() || curve2.IsNull()) {
+		// 如果任何一条边没有几何曲线，返回 false
+		return false;
+	}
+
+	// 计算两条边的方向向量
+	gp_Vec dir1, dir2;
+	gp_Pnt p1_start, p1_end, p2_start, p2_end;
+
+	curve1->D0(f1, p1_start);
+	curve1->D0(l1, p1_end);
+	dir1 = gp_Vec(p1_start, p1_end);
+
+	curve2->D0(f2, p2_start);
+	curve2->D0(l2, p2_end);
+	dir2 = gp_Vec(p2_start, p2_end);
+
+	// 归一化方向向量
+	if (dir1.Magnitude() < tolerance || dir2.Magnitude() < tolerance) {
+		// 如果某条边的长度接近于零，认为不平行
+		return false;
+	}
+
+	dir1.Normalize();
+	dir2.Normalize();
+
+	// 检查向量是否平行（点积的绝对值接近1）
+	double dotProduct = Abs(dir1.Dot(dir2));
+	return Abs(dotProduct - 1.0) < tolerance;
+}
+
+
 void SheetFlattenProcess::processSplitEdge()
 {
 	double maxDistance = -1;
+	int MaxparallelNumber = -1;
 	gp_Dir standard(0, 0, 1);
 	gp_Vec moveVec,baseVec,tarVec;
 	bool isAdj = false;
@@ -2400,19 +2439,7 @@ void SheetFlattenProcess::processSplitEdge()
 						!AreEdgesSameEndpoints(base.getEdge_3d(), target.getEdge_3d())) {
 						continue;
 					}
-					
-
-					double distance = CalculateEdgeDistance(base.getOldEdge_2d(), target.getOldEdge_2d());
-					if (distance > maxDistance)
-					{
-						idexj = j;
-						isAdj = true;
-						maxDistance = distance;
-						maxBaseIndex = baseIndex;
-						maxTarIndex = tarIndex;
-					}
-
-
+	
 					// 获取基础边和目标边的面数据
 					const auto& baseFaces = base.getVector_face();
 					const auto& targetFaces = target.getVector_face();
@@ -2431,6 +2458,20 @@ void SheetFlattenProcess::processSplitEdge()
 					target.setProcessWrapAngle(true);
 					target.setWrapAngle(true);
 					target.setAngle(angle1);
+
+					double distance = CalculateEdgeDistance(base.getOldEdge_2d(), target.getOldEdge_2d());
+
+					if (fabs(M_PI - angle1) > 1e-6)
+					{
+						if (distance > maxDistance)
+						{
+							idexj = j;
+							isAdj = true;
+							maxDistance = distance;
+							maxBaseIndex = baseIndex;
+							maxTarIndex = tarIndex;
+						}
+					}
 				}
 				
 				tarIndex = -1;
@@ -2445,7 +2486,7 @@ void SheetFlattenProcess::processSplitEdge()
 				double teset = fabs(angle - M_PI);
 				bool isrotate = false;
 				//angle = CalculateEdgeClockwiseAngle(base.getNewEdge_2d(), target.getNewEdge_2d(), standard);
-				if (fabs(angle) > 1e-2 && fabs(angle - M_PI) > 1e-2)
+				if (fabs(angle) > 1e-2 )
 				{
 					for (auto& elem : targetGroup)
 					{
@@ -2462,6 +2503,7 @@ void SheetFlattenProcess::processSplitEdge()
 				if (isrotate)
 				{
 					maxDistance = -1;
+					MaxparallelNumber = -1;
 					tarIndex = -1;
 					baseIndex = -1;
 					for (auto& base : baseGroup) {
@@ -2516,6 +2558,7 @@ void SheetFlattenProcess::processSplitEdge()
 		idexj = -1;
 		j = -1;
 		maxDistance = -1.;
+		MaxparallelNumber = -1;
 	}
 }
 
@@ -2540,6 +2583,7 @@ void SheetFlattenProcess::processEdges_WrapAngle() {
 void SheetFlattenProcess::generate(TopoDS_Compound& aCompound)
 {
 	check();
+	//processParallelEdge();
 	processSplitEdge();
 	check();
 	moveSplitEdge();
@@ -2619,9 +2663,17 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 		{
 			if (aEdgadata->isOverlapeEdge())
 			{
-				gp_Pnt aBasePoint = aEdgadata->getOverLapEdge_Point();
-				aBasePoint.Transform(translation);
-				aEdgadata->setOverLapEdge_Point(aBasePoint);
+				if (!aEdgadata->isFirstMoveOverlapeEdge())
+				{
+					aEdgadata->setFirstMoveOverlapeEdge(true);
+					continue;
+				}
+				else
+				{
+					gp_Pnt aBasePoint = aEdgadata->getOverLapEdge_Point();
+					aBasePoint.Transform(translation);
+					aEdgadata->setOverLapEdge_Point(aBasePoint);
+				}
 			}
 			for (auto elem : tempedge)
 			{
@@ -2695,6 +2747,7 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 	vector<TopoDS_Edge> colines;
 	vector<TopoDS_Edge> otherlines;
 	vector<TopoDS_Face> faces;
+	int rightNumber = 0, leftNumber = 0;
 	if (edge.getVector_face().size()>=2)
 	{
 
@@ -2709,6 +2762,27 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 		{
 			m_baseVec = -m_baseVec;
 		}*/
+
+		for (auto& elem : leftEdges)
+		{
+			SheetFlattenEdgeData* aEdgadata = nullptr;
+			quiryEdgeData(elem, aEdgadata);
+			if (aEdgadata->isBendEdge())
+			{
+				++leftNumber;
+			}
+		}
+
+		for (auto& elem : rightEdges)
+		{
+			SheetFlattenEdgeData* aEdgadata = nullptr;
+			quiryEdgeData(elem, aEdgadata);
+			if (aEdgadata->isBendEdge())
+			{
+				++rightNumber;
+			}
+		}
+
 		double moveDis = 2.;
 		calTranslate(moveDis, translation_slot, angle);
 		calTranslate(moveDis, translation, angle);//确定移动方向和角度
@@ -2720,7 +2794,7 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 		{
 			m_isNegativeBend = true;
 		}
-		if (rightEdges.size() <= leftEdges.size())
+		if (rightNumber <= leftNumber)
 		{
 			generateMidleEdge(colines, translation, translation_slot);
 			generateNewEdge(rightEdges, translation, true);
@@ -2737,6 +2811,8 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 			generateNewEdge(leftEdges, translation, true);
 			generateNewEdge(otherlines, translation, true);
 		}
+		rightNumber = 0;
+		leftNumber = 0;
 	
 
 

@@ -270,6 +270,7 @@ inline bool SheetFlattenCore::CalculateAngleBetweenFaces(const TopoDS_Face& face
 	}
 
 	gp_Dir normalBase = propsBase.Normal();
+	normalBase = -normalBase;
 
 	// 获取第二个面的法向量
 	Handle(Geom_Surface) surfaceTarget = BRep_Tool::Surface(faceTarget);
@@ -279,6 +280,7 @@ inline bool SheetFlattenCore::CalculateAngleBetweenFaces(const TopoDS_Face& face
 		return false;
 	}
 	gp_Dir normalTarget = propsTarget.Normal();	
+	normalTarget = -normalTarget;
 	if (normalTarget.IsEqual(normalBase, 1e-6))
 	{
 		angle = 0.;
@@ -367,6 +369,10 @@ void SheetFlattenCore::process()
 			if (mapEdgeAdjFaces.find(elem.first) != mapEdgeAdjFaces.end())
 			{
 				vector<TopoDS_Face> aFaces(mapEdgeAdjFaces.find(elem.first)->second.begin(), mapEdgeAdjFaces.find(elem.first)->second.end());
+				if (aFaces.size() >= 2)
+				{
+					m_EdgeData.setBendEdge(true);
+				}
 				m_EdgeData.setVector_face(aFaces);
 			}
 			if (mapFacesAngle.find(elem.first) != mapFacesAngle.end())

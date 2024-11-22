@@ -139,6 +139,13 @@ public:
     bool isProcessWrapAngle() { return m_bProcessWrapAngle; }
     void setProcessWrapAngle(bool data) { m_bProcessWrapAngle = data; }
 
+    void addParallelNumber() { ++m_parallelNumber; }
+    int getPatallelNumber() { return m_parallelNumber; }
+
+
+    void setFirstMoveOverlapeEdge(bool data) { m_bFirstMoveOverlapeEdge = data; }
+    bool isFirstMoveOverlapeEdge() { return m_bFirstMoveOverlapeEdge; }
+
 
     bool isBendEdge() { return m_bBendEdge; }
     void setBendEdge(bool data) { m_bBendEdge = data; }
@@ -193,6 +200,7 @@ private:
 	vector<TopoDS_Edge> m_vector_interseEdge_new2d;//共面且相交判断条件在新二维的基础上
 	bool m_bMidleEdge;
 	bool m_bOverlapeEdge;
+    bool m_bFirstMoveOverlapeEdge = false;
     bool m_bWrapAngle;
     bool m_bBendEdge;
 	bool m_bSoltEdge;
@@ -203,6 +211,7 @@ private:
     bool m_bNegativeBend;
     bool m_bOutline;
     bool m_bProcessWrapAngle;
+    int m_parallelNumber = 0;
     pair<int, int> m_SplitIndex;
 	TopoDS_Edge m_OutlineEdge;
 	gp_Pnt m_overLapEdge_Point;
