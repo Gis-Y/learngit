@@ -147,6 +147,14 @@ public:
     bool isFirstMoveOverlapeEdge() { return m_bFirstMoveOverlapeEdge; }
 
 
+    void SetCurveType(CurveType type) {
+        m_curveType = type;
+    }
+    CurveType GetCurveType() const {
+        return m_curveType;
+    }
+
+
     bool isBendEdge() { return m_bBendEdge; }
     void setBendEdge(bool data) { m_bBendEdge = data; }
 
@@ -201,6 +209,7 @@ private:
 	bool m_bMidleEdge;
 	bool m_bOverlapeEdge;
     bool m_bFirstMoveOverlapeEdge = false;
+    CurveType m_curveType;
     bool m_bWrapAngle;
     bool m_bBendEdge;
 	bool m_bSoltEdge;

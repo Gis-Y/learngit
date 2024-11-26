@@ -1084,7 +1084,7 @@ public:
 		app->Close(doc);
 	}
 
-	void CreateOutline(TopoDS_Compound &aCompound , FlattenFace & flat , map<TopoDS_Edge, TopoDS_Edge > &NewMapEdgeAdjEdge)
+	void CreateOutline(TopoDS_Compound &aCompound , FlattenFace & flat , map<TopoDS_Edge, pair<TopoDS_Edge, CurveType> > &NewMapEdgeAdjEdge)
 	{
 		//SaveDxfFile saveFile;
 		double offset = M_PI;
@@ -1106,7 +1106,7 @@ public:
 
 			if (sheetFlatFit->Perform(aPoints, fitCurve) >= 0)
 			{
-				NewMapEdgeAdjEdge[item.first] = fitCurve.edge;
+				NewMapEdgeAdjEdge[item.first] = make_pair(fitCurve.edge, fitCurve.curveType);
 			}
 			gp_Pnt2d p1 = std::get<0>(fitCurve.line);
 			gp_Pnt2d p2 = std::get<1>(fitCurve.line);

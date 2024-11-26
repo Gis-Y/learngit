@@ -18,6 +18,9 @@
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <TopoDS_Shape.hxx>
 
+
+#include<GeomAPI_IntCS.hxx>
+
 #include "SheetFlattenEdgeData.h"
 
 
@@ -104,7 +107,7 @@ private:
 	void calTranslateOriention(const TopoDS_Edge& theEdge, const gp_Pnt& thePoint, gp_Trsf& theTranslation, const double theDistance);
 public:
 	void check();
-	void generate(TopoDS_Compound& aCompound);
+	void generate();
 	void generateEdge(const TopoDS_Edge& theEdge);
 	void setEdgeData(const vector<vector<SheetFlattenEdgeData>>& EdgeData);
 	void setOldEdgeIndex(const map<TopoDS_Edge, pair<int, int>>& index);
@@ -156,6 +159,31 @@ void SheetFlattenProcess::changeMapIdex(const TopoDS_Edge& oldEdge, const TopoDS
 	}
 }
 
+TopoDS_Edge MoveEdge(const TopoDS_Edge& edge, const gp_Trsf& translation) {
+	// 获取边的几何曲线
+
+	TopoDS_Vertex v1 = TopExp::FirstVertex(edge);  // 获取起点
+	TopoDS_Vertex v2 = TopExp::LastVertex(edge);   // 获取终点
+	gp_Vec translationVec = translation.TranslationPart();
+	gp_Pnt p1 = BRep_Tool::Pnt(v1);  // 获取起点坐标
+	gp_Pnt p2 = BRep_Tool::Pnt(v2);
+	TopoDS_Edge aEdge = BRepBuilderAPI_MakeEdge(p1, p2);
+	Standard_Real first, last;
+	Handle(Geom_Curve) curve = BRep_Tool::Curve(aEdge, first, last);
+
+	if (curve.IsNull()) {
+		std::cerr << "Error: The edge does not have a valid curve." << std::endl;
+	}
+
+
+	// 对曲线应用平移
+	Handle(Geom_Curve) movedCurve = Handle(Geom_Curve)::DownCast(curve->Transformed(translation));
+
+	// 构造一个新的边，保持原始参数
+	TopoDS_Edge movedEdge = BRepBuilderAPI_MakeEdge(movedCurve, first, last);
+	return movedEdge;
+
+}
 
 bool SheetFlattenProcess::quiryEdgeData(const TopoDS_Edge & baseEdge,SheetFlattenEdgeData*& data)
 {
@@ -1504,6 +1532,80 @@ bool SheetFlattenProcess::judgeless(double x, double y)
 		return false;
 }
 
+
+// 判断两个 TopoDS_Edge 是否相交
+bool AreEdgesIntersecting(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp_Pnt& intersectionPoint) {
+	// 提取曲线和参数范围
+	Standard_Real f1, l1, f2, l2;
+	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, f1, l1);
+	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, f2, l2);
+
+
+	TopoDS_Vertex v1_1 = TopExp::FirstVertex(edge1);
+	TopoDS_Vertex v1_2 = TopExp::LastVertex(edge1);
+	gp_Pnt p1_1 = BRep_Tool::Pnt(v1_1);
+	gp_Pnt p1_2 = BRep_Tool::Pnt(v1_2);
+
+	// 获取第二条线段的起点和终点
+	TopoDS_Vertex v2_1 = TopExp::FirstVertex(edge2);
+	TopoDS_Vertex v2_2 = TopExp::LastVertex(edge2);
+	gp_Pnt p2_1 = BRep_Tool::Pnt(v2_1);
+	gp_Pnt p2_2 = BRep_Tool::Pnt(v2_2);
+
+
+
+	if (curve1.IsNull() || curve2.IsNull()) {
+		std::cerr << "One or both edges have invalid curves." << std::endl;
+		return false;
+	}
+
+	// 检查曲线是否平行（通过两曲线的导数方向比较）
+	gp_Vec dir1, dir2;
+	curve1->D1(f1, gp_Pnt(), dir1);
+	curve2->D1(f2, gp_Pnt(), dir2);
+	Standard_Real dotProduct = dir1.Dot(dir2);
+	Standard_Real angle = Abs(acos(dotProduct / (dir1.Magnitude() * dir2.Magnitude())));
+
+	/*if (angle < Precision::Angular() || angle > M_PI - Precision::Angular()) {
+		std::cerr << "Edges are nearly parallel." << std::endl;
+		return false;
+	}*/
+
+	// 使用 GeomAPI_ExtremaCurveCurve 获取最近点对
+	GeomAPI_ExtremaCurveCurve extrema(curve1, curve2);
+	if (extrema.NbExtrema() == 0) {
+		return false; // 没有交点
+	}
+
+	Standard_Real tolerance = Precision::Confusion();
+
+	for (int i = 1; i <= extrema.NbExtrema(); ++i) {
+		try {
+			// 判断最近点对的距离是否接近 0
+			if (extrema.Distance(i) < tolerance) {
+				gp_Pnt p1, p2;
+				extrema.Points(i, p1, p2);
+
+				// 检查交点是否在两条线段的参数范围内
+				Standard_Real param1, param2;
+				extrema.Parameters(i, param1, param2);
+
+				if (param1 >= f1-1e-7 && param1 <= l1+1e-7 && param2 >= f2-1e-7 && param2 <= l2+1e-7) {
+					intersectionPoint = p1; // 确认交点
+					return true;
+				}
+			}
+		}
+		catch (Standard_Failure& err) {
+			std::cerr << "Error while checking intersection: " << err.GetMessageString() << std::endl;
+			return false;
+		}
+	}
+
+	return false; // 没有交点
+}
+
+
 //判断两条线段相交
 bool SheetFlattenProcess::EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2)
 {
@@ -1549,6 +1651,7 @@ bool SheetFlattenProcess::EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_E
 void SheetFlattenProcess::processSameFaceEdgeRelation()
 {
 	vector<TopoDS_Edge> intersectionLines, lines;
+	gp_Pnt point;
 	for (auto &elem : m_EdgeData)
 	{
 		for (auto &item : elem)
@@ -1569,7 +1672,7 @@ void SheetFlattenProcess::processSameFaceEdgeRelation()
 						quiry3dEdgeData(otherEdge, pEdgedata);
 						TopoDS_Edge twoEdge = pEdgedata->getOldEdge_2d();
 						//TopoDS_Edge twoEdge = m_ThreeToTwoEdge.find(otherEdge)->second;//旧二维
-						if (EdgeIntersect(twoEdge, item.getOldEdge_2d()))/*AreEdgesIntersecting(twoEdge, ThreeToTwoEdge.find(edge)->second)*/
+						if (AreEdgesIntersecting(twoEdge, item.getOldEdge_2d(), point))/*AreEdgesIntersecting(twoEdge, ThreeToTwoEdge.find(edge)->second)*/
 						{
 							intersectionLines.emplace_back(twoEdge);
 						}
@@ -1627,6 +1730,7 @@ bool SheetFlattenProcess::relationEdge(TopoDS_Edge edge)
 void SheetFlattenProcess::allReation2dEdge()
 {
 	vector<TopoDS_Edge> interseEdges;
+	gp_Pnt interPoint;
 	for (auto &elem : m_EdgeData)
 	{
 		for (auto &base : elem)
@@ -1637,7 +1741,7 @@ void SheetFlattenProcess::allReation2dEdge()
 				TopoDS_Edge tarEdge = tar.getOldEdge_2d();
 				if (baseEdge != tarEdge)
 				{
-					if (EdgeIntersect(baseEdge, tarEdge) && !isOverlap(baseEdge, tarEdge))
+					if (!isOverlap(baseEdge, tarEdge) && AreEdgesIntersecting(baseEdge, tarEdge, interPoint))
 					{
 						interseEdges.push_back(tarEdge);
 						
@@ -1670,6 +1774,7 @@ void SheetFlattenProcess::allReation2dNewEdge()
 {
 	TopoDS_Edge baseEdge, tarEdge;
 	vector<TopoDS_Edge> interseEdges;
+	gp_Pnt insterPoint;
 	for (auto &elem : m_EdgeData)
 	{
 		for (auto &base : elem)
@@ -1685,7 +1790,7 @@ void SheetFlattenProcess::allReation2dNewEdge()
 		
 				if (baseEdge != tarEdge)
 				{
-					if (EdgeIntersect(baseEdge, tarEdge) && !isOverlap(baseEdge, tarEdge))
+					if (AreEdgesIntersecting(baseEdge, tarEdge,insterPoint) && !isOverlap(baseEdge, tarEdge))
 					{
 						interseEdges.push_back(tar.getOldEdge_2d());
 					}
@@ -2569,6 +2674,10 @@ void SheetFlattenProcess::processEdges_WrapAngle() {
 		// 移动尚未完成的边
 		for (auto& edge : baseGroup) 
 		{
+			if (!edge.isBendEdge())
+			{
+				continue;
+			}
 			if (!edge.isFinish()) 
 			{
 				moveEdge(baseGroup, edge);
@@ -2580,7 +2689,7 @@ void SheetFlattenProcess::processEdges_WrapAngle() {
 
 
 
-void SheetFlattenProcess::generate(TopoDS_Compound& aCompound)
+void SheetFlattenProcess::generate()
 {
 	check();
 	//processParallelEdge();
@@ -2666,6 +2775,12 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 				if (!aEdgadata->isFirstMoveOverlapeEdge())
 				{
 					aEdgadata->setFirstMoveOverlapeEdge(true);
+					gp_Pnt otherpiont = findOtherPoint(aEdgadata->getNewEdge_2d(), aEdgadata->getOverLapEdge_Point());
+					otherpiont.Transform(translation);
+					TopoDS_Edge newEdge = BRepBuilderAPI_MakeEdge(aEdgadata->getOverLapEdge_Point(), otherpiont);
+					aEdges.emplace_back(newEdge);
+					aEdgadata->setVector_newEdge_2d(aEdges);
+					aEdges.clear();
 					continue;
 				}
 				else
@@ -2677,7 +2792,7 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 			}
 			for (auto elem : tempedge)
 			{
-				TopoDS_Edge newedge = TranslateEdge(elem, translation);
+				TopoDS_Edge newedge = MoveEdge(elem, translation);
 				aEdges.emplace_back(newedge);
 			}
 			aEdgadata->setVector_newEdge_2d(aEdges);
@@ -2715,7 +2830,8 @@ void SheetFlattenProcess::generateMidleEdge(const vector<TopoDS_Edge>& theMoveEd
 				newedge = TranslateEdge(tempedge, theTranslation_slot);
 			}
 			else {
-				newedge = TranslateEdge(tempedge, theTranslation);
+				//newedge = TranslateEdge(tempedge, theTranslation);
+				newedge = MoveEdge(tempedge, theTranslation);
 			}
 			TopoDS_Edge midedge = midleLine(tempedge, newedge);
 			aEdges.emplace_back(midedge);

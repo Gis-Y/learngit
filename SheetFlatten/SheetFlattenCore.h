@@ -72,6 +72,8 @@ public:
 	int Perform();
 
 	double GetFacesAngle(const TopoDS_Edge& edge);
+	void setSoltListId(const vector<Standard_Integer>& data);
+	void setSplitListId(const vector<Standard_Integer>& data);
 
 private:
 
@@ -108,14 +110,14 @@ private:
 	map<TopoDS_Edge, pair<int, int>> m_EdgeToEdgeDataIndex;
 	map<TopoDS_Edge, pair<int, int>> m_3dEdgeToEdgeDataIndex;
 
-public:
+private:
 	SheetFlattenProcess  m_process;
-	map<TopoDS_Edge, TopoDS_Edge > m_m3dTo2d;
+	map<TopoDS_Edge, pair<TopoDS_Edge, CurveType>> m_m3dTo2d;
 	vector<vector<SheetFlattenEdgeData>> m_vEdgeDatas;
 	vector<SheetFlattenEdgeData> m_EdgeDatas;
 	SheetFlattenEdgeData m_EdgeData;
 	SheetFalttenMove aFalttenMove;
-public:
+private:
 	vector<Standard_Integer> m_SoltListId;
 	vector<Standard_Integer> m_SplitListId;
 	set<TopoDS_Edge> m_mapSplitEdges;
@@ -129,6 +131,15 @@ public:
 
 };
 
+void SheetFlattenCore::setSoltListId(const vector<Standard_Integer>& data)
+{
+	m_SoltListId = data;
+}
+
+void SheetFlattenCore::setSplitListId(const vector<Standard_Integer>& data)
+{
+	m_SplitListId = data;
+}
 
 
 inline bool SheetFlattenCore::Read(const string& filePath)
@@ -195,6 +206,7 @@ inline int SheetFlattenCore::Perform()
 		}
 	}
 
+	m_process.generate();
 	return 0;
 }
 inline double SheetFlattenCore::GetFacesAngle(const TopoDS_Edge& edge)
@@ -392,10 +404,15 @@ void SheetFlattenCore::process()
 			{
 				m_EdgeData.setSplitEdge(true);
 			}
-			m_EdgeData.setOldEdge_2d(elem.second);
+			m_EdgeData.setOldEdge_2d(elem.second.first);
+			m_EdgeData.SetCurveType(elem.second.second);
+			if (elem.second.second != LineCurve)
+			{
+				m_EdgeData.setBendEdge(false);
+			}
 			m_EdgeDatas.emplace_back(m_EdgeData);
 			m_EdgeData.clear();
-			m_EdgeToEdgeDataIndex[elem.second] = make_pair(i, j);
+			m_EdgeToEdgeDataIndex[elem.second.first] = make_pair(i, j);
 			m_3dEdgeToEdgeDataIndex[elem.first] = make_pair(i, j);
 		}
 		j = -1;

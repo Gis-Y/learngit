@@ -636,9 +636,20 @@ inline bool SheetFlattenFitting::FitLine(const Handle(TColgp_HArray1OfPnt2d)& aP
 	{
 		gp_Pnt2d p1, p2;
 		lineFitting.GetLineParameter(p1, p2);
-		BRepBuilderAPI_MakeEdge2d makeEdge = BRepBuilderAPI_MakeEdge2d(p1, p2);
+
+		// 假设线段位于 XY 平面，Z = 0
+		gp_Pnt p1_3d(p1.X(), p1.Y(), 0.0);  // 将 2D 点提升到 3D 空间
+		gp_Pnt p2_3d(p2.X(), p2.Y(), 0.0);  // 将 2D 点提升到 3D 空间
+
+		// 使用 BRepBuilderAPI_MakeEdge 创建 3D 线段
+		BRepBuilderAPI_MakeEdge makeEdge = BRepBuilderAPI_MakeEdge(p1_3d, p2_3d);
+
+
+
+		//BRepBuilderAPI_MakeEdge2d makeEdge = BRepBuilderAPI_MakeEdge2d(p1, p2);
 		fitCurve.curveType = LineCurve;
 		fitCurve.edge = makeEdge.Edge();
+
 		fitCurve.line = make_tuple(p1, p2);
 
 		cout << "Create Line." << endl;
@@ -709,10 +720,25 @@ inline bool SheetFlattenFitting::FitCircle(const Handle(TColgp_HArray1OfPnt2d)& 
 			
 		}
 
-		BRepBuilderAPI_MakeEdge2d makeEdge = BRepBuilderAPI_MakeEdge2d(L, U1, U2);		
+
+		// Create 3D circle from the 2D circle data
+		gp_Pnt center3d(center.X(), center.Y(), 0.0);  // Assume the circle lies in the XY plane (Z=0)
+		gp_Dir normal(0.0, 0.0, 1.0);  // Normal vector along the Z-axis
+
+		// Create the 3D circle
+		gp_Ax2 axis(center3d, normal); // Circle axis in 3D space
+		gp_Circ circle3d(axis, R);     // 3D circle
+
+		// Create 3D edge using the 3D circle
+		BRepBuilderAPI_MakeEdge makeEdge3d(circle3d, U1, U2);
+
+		//fitCurve.curveType = CircleCurve;
+		//fitCurve.edge = makeEdge3d.Edge();  // Set the 3D edge
+
+		//BRepBuilderAPI_MakeEdge2d makeEdge = BRepBuilderAPI_MakeEdge2d(L, U1, U2);		
 
 		fitCurve.curveType = CircleCurve;
-		fitCurve.edge = makeEdge.Edge();
+		fitCurve.edge = makeEdge3d.Edge();
 
 		fitCurve.circle = make_tuple(center, R, U1, U2);
 
