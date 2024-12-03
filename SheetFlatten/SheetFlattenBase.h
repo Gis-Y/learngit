@@ -422,7 +422,7 @@ public:
 
 		BuildNodes(triFace->InternalNodes(), location);
 		BuildElement(triFace->InternalTriangles());
-		this->DumpNasEx("E:/face1.nas");
+		this->DumpNasEx("D:/face1.nas");
 		BuildEdge(objFace, triFace);
 
 	}

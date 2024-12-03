@@ -38,9 +38,6 @@
     <ClInclude Include="SheetFlattenFitting.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="SheetFlattenMove.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="SheetFlattenEdgeData.h">
       <Filter>头文件</Filter>
     </ClInclude>

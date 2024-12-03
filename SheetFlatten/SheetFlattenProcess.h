@@ -52,8 +52,6 @@ private:
 	void processSameFaceEdgeRelation();
 	bool isOverlap(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
 	gp_Pnt findOtherPoint(const TopoDS_Edge& theEdge, const gp_Pnt& thePoint);
-	bool getAdjFace(TopoDS_Edge edge, vector<TopoDS_Face>& result);
-	bool relationEdge(TopoDS_Edge edge);
 	void allReation2dEdge();
 	TopoDS_Edge midleLine(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
 	void FindEdgesOnBothSides(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& baseEdge,
@@ -79,7 +77,6 @@ private:
 	int GetPointSide1(const gp_Pnt& baseStart, const gp_Pnt& baseEnd, const gp_Pnt& point);
 	int GetPointSide(const gp_Pnt& baseStart, const gp_Pnt& baseEnd, const gp_Pnt& point);
 	void allReation2dNewEdge();
-	void findSameEdge(map<TopoDS_Edge, TopoDS_Edge>& result);
 	bool judgeless(double x, double y);
 	bool EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
 	bool TrimEdgesAtIntersection1(TopoDS_Edge& theEdge1, TopoDS_Edge& theEdge2, gp_Pnt& theIntersection);
@@ -91,7 +88,6 @@ private:
 	bool quiryEdgeData(const TopoDS_Edge& baseEdge, SheetFlattenEdgeData*& data);
 	void changeMapIdex(const TopoDS_Edge& baseEdge, const TopoDS_Edge& tarEdge);
 	bool quiry3dEdgeData(const TopoDS_Edge& baseEdge, SheetFlattenEdgeData*& data);
-	void openSlot();
 	void wrapAngle();
 	void makeLapelMap();
 	void processOutline();
@@ -108,7 +104,6 @@ private:
 public:
 	void check();
 	void generate();
-	void generateEdge(const TopoDS_Edge& theEdge);
 	void setEdgeData(const vector<vector<SheetFlattenEdgeData>>& EdgeData);
 	void setOldEdgeIndex(const map<TopoDS_Edge, pair<int, int>>& index);
 	void set3dEdgeIndex(const map<TopoDS_Edge, pair<int, int>>& mapindex);
@@ -120,22 +115,7 @@ public:
 	map<TopoDS_Edge, pair<int, int>> m_oldEdgeIndex;
 	map<TopoDS_Edge, pair<int, int>> m_3dEdgeIndex;
 	map<TopoDS_Edge, vector<TopoDS_Face> > m_MapEdgeAdjFaces;
-	map<TopoDS_Edge, TopoDS_Edge> m_ThreeToTwoEdge;
-	map<TopoDS_Edge, TopoDS_Edge> m_TwoToThreeEdge;
-	map<TopoDS_Edge, vector<TopoDS_Edge>>m_oldMapNewEdge;
-	map<TopoDS_Edge, TopoDS_Edge>m_newMapOldEdge;
-	map<TopoDS_Edge, vector<TopoDS_Edge>>m_MapInterseLines;//旧二维对旧二维
-	map<TopoDS_Edge, vector<TopoDS_Edge>>m_MapInterseNewLines;//旧二维对旧二维，只不过判断交线的时候用的是新二维
-	map<TopoDS_Edge, interseLine_Line> m_interseLine_LineMap;//三维对旧二维
-	map<TopoDS_Edge, vector<TopoDS_Edge>> m_MapLapelEdges;
-	set<TopoDS_Edge> m_finishEdge;
-	set<TopoDS_Edge> m_overlapEdges;
-	map<TopoDS_Edge, gp_Pnt> m_overLapEdge_Point;
-	set<TopoDS_Face> m_twoFaces;
-	vector<TopoDS_Edge> m_positiveEdges;
-	vector<TopoDS_Edge> m_negativeEdges;
-	vector<TopoDS_Edge> m_slotEdges_3d;//三维线
-	set<TopoDS_Edge> m_slotEdges_2d;
+
 	gp_Dir m_refDir;
 	gp_Vec m_baseVec;//移动方向  放
 	bool m_isNegativeBend;
@@ -527,17 +507,6 @@ void SheetFlattenProcess::makeLapelMap()
 		}
 	}
 
-}
-void SheetFlattenProcess::openSlot()
-{
-	TopoDS_Edge aEdge_2d;
-	for (auto elem : m_slotEdges_3d)
-	{
-		if (findMap_EdgeAndEdge_ToEdge(m_ThreeToTwoEdge, elem, aEdge_2d))
-		{
-			m_slotEdges_2d.insert(aEdge_2d);
-		}
-	}
 }
 
 //求交点坐标
@@ -1504,23 +1473,6 @@ bool SheetFlattenProcess::TrimEdgesAtIntersection(TopoDS_Edge& theEdge1, TopoDS_
 			theEdge2 = BRepBuilderAPI_MakeEdge(theIntersection, p2_1);
 		}
 	}
-
-
-
-	// 根据距离裁剪每条线段的起点或终点，使它们在交点处相接
-	/*if (p1_1.Distance(intersection) < p1_2.Distance(intersection)) {
-		edge1 = BRepBuilderAPI_MakeEdge(p1_2, intersection);
-	}
-	else {
-		edge1 = BRepBuilderAPI_MakeEdge(intersection, p1_1);
-	}
-
-	if (p2_1.Distance(intersection) < p2_2.Distance(intersection)) {
-		edge2 = BRepBuilderAPI_MakeEdge(p2_2, intersection);
-	}
-	else {
-		edge2 = BRepBuilderAPI_MakeEdge(intersection, p2_1);
-	}*/
 	return true;
 }
 bool SheetFlattenProcess::judgeless(double x, double y)
@@ -1533,7 +1485,7 @@ bool SheetFlattenProcess::judgeless(double x, double y)
 }
 
 
-// 判断两个 TopoDS_Edge 是否相交
+// 判断两个线段是否相交
 bool AreEdgesIntersecting(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp_Pnt& intersectionPoint) {
 	// 提取曲线和参数范围
 	Standard_Real f1, l1, f2, l2;
@@ -1692,41 +1644,6 @@ void SheetFlattenProcess::processSameFaceEdgeRelation()
 	}
 }
 
-//找到一个面里的交线
-bool SheetFlattenProcess::relationEdge(TopoDS_Edge edge)
-{
-	vector<TopoDS_Edge> intersectionLines;
-	vector<TopoDS_Edge> lines;
-	auto faceIt = m_MapEdgeAdjFaces.find(edge);
-	for (auto it : faceIt->second)
-	{
-
-
-		for (TopExp_Explorer edgeExplorer(it, TopAbs_EDGE); edgeExplorer.More(); edgeExplorer.Next())
-		{
-
-			TopoDS_Edge otherEdge = TopoDS::Edge(edgeExplorer.Current());//三维的线
-			if (otherEdge != edge)
-			{
-				gp_Pnt intersection1;
-				TopoDS_Edge twoEdge = m_ThreeToTwoEdge.find(otherEdge)->second;//旧二维
-				if (EdgeIntersect(twoEdge, m_ThreeToTwoEdge.find(edge)->second))/*AreEdgesIntersecting(twoEdge, ThreeToTwoEdge.find(edge)->second)*/
-				{
-					intersectionLines.emplace_back(twoEdge);
-				}
-				else {
-					lines.emplace_back(twoEdge);
-				}
-			}
-		}
-
-	}
-	interseLine_Line item;
-	item.interseLine = intersectionLines;
-	item.Line = lines;
-	m_interseLine_LineMap[edge] = item;
-	return true;
-}
 void SheetFlattenProcess::allReation2dEdge()
 {
 	vector<TopoDS_Edge> interseEdges;
@@ -1752,23 +1669,6 @@ void SheetFlattenProcess::allReation2dEdge()
 			interseEdges.clear();
 		}
 	}
-	//for (auto it : m_ThreeToTwoEdge)
-	//{
-	//	TopoDS_Edge baseEdge = it.second;
-	//	for (auto elem : m_ThreeToTwoEdge)
-	//	{
-	//		TopoDS_Edge comEdge = elem.second;
-	//		if (baseEdge != comEdge)
-	//		{
-	//			if (EdgeIntersect(baseEdge, comEdge) && !isOverlap(baseEdge, comEdge))
-	//			{
-	//				//interseEdges.push_back(comEdge);
-	//			}
-	//		}
-	//	}
-	//	//m_MapInterseLines[baseEdge] = interseEdges;
-	//	//interseEdges.clear();
-	//}
 }
 void SheetFlattenProcess::allReation2dNewEdge()
 {
@@ -1800,39 +1700,6 @@ void SheetFlattenProcess::allReation2dNewEdge()
 			interseEdges.clear();
 		}
 	}
-
-
-
-	//vector<TopoDS_Edge> interseEdges;
-	//for (auto it : m_ThreeToTwoEdge)
-	//{
-	//	TopoDS_Edge baseEdge = it.second;
-	//	findMap_EdgeAndVector_ToEdge(m_oldMapNewEdge, it.second, baseEdge);
-
-	//	for (auto elem : m_ThreeToTwoEdge)
-	//	{
-	//		TopoDS_Edge comEdge = elem.second;
-	//		findMap_EdgeAndVector_ToEdge(m_oldMapNewEdge, elem.second, comEdge);
-	//		if (baseEdge != comEdge)
-	//		{
-	//			if (EdgeIntersect(baseEdge, comEdge) && !isOverlap(baseEdge, comEdge))
-	//			{
-	//				/*TopoDS_Edge old2dEdge;
-	//				if(_2dTo3dEdge(m_newMapOldEdge, comEdge, old2dEdge))
-	//				{
-	//					interseEdges.push_back(old2dEdge);
-	//				}
-	//				else
-	//				{
-	//					interseEdges.push_back(comEdge);
-	//				}*/
-	//				interseEdges.push_back(elem.second);
-	//			}
-	//		}
-	//	}
-	//	m_MapInterseNewLines[it.second] = interseEdges;
-	//	interseEdges.clear();
-	//}
 }
 
 void SheetFlattenProcess::gerateNegativeBend(SheetFlattenEdgeData*& pEdgedata)
@@ -1971,47 +1838,6 @@ void SheetFlattenProcess::generateOverlapEdge(const TopoDS_Edge& theEdge)
 		}
 	}
 	
-}
-void SheetFlattenProcess::generateEdge(const TopoDS_Edge& theEdge)
-{
-	gp_Pnt intersection;
-	TopoDS_Edge newbaseEdge = theEdge, newInterseEdge;
-	if (m_oldMapNewEdge.find(theEdge) != m_oldMapNewEdge.end())
-	{
-		newbaseEdge = m_oldMapNewEdge.find(theEdge)->second[0];
-	}
-	if (m_MapInterseNewLines.find(theEdge) != m_MapInterseNewLines.end())
-	{
-		for (auto itemm : m_MapInterseNewLines.find(theEdge)->second)
-		{
-			vector<TopoDS_Edge> aEdge, aVectorEdge1;
-			TopoDS_Edge aEdge1, aEdge2;
-			newInterseEdge = itemm;
-			if (m_oldMapNewEdge.find(itemm) != m_oldMapNewEdge.end())
-			{
-				newInterseEdge = m_oldMapNewEdge.find(itemm)->second[0];
-				if (m_oldMapNewEdge.find(itemm)->second.size() >= 3)
-				{
-					aEdge1 = m_oldMapNewEdge.find(itemm)->second[1];
-					aEdge2 = m_oldMapNewEdge.find(itemm)->second[2];
-				}
-			}
-
-			TrimEdgesAtIntersection(newbaseEdge, newInterseEdge, intersection);//延长线到交点
-			//oldMapNewEdge[edge] = newsideEdge;
-			aEdge.emplace_back(newInterseEdge);
-			if (m_oldMapNewEdge.find(itemm) != m_oldMapNewEdge.end())
-			{
-				if (m_oldMapNewEdge.find(itemm)->second.size() >= 3)
-				{
-					aEdge.emplace_back(m_oldMapNewEdge.find(itemm)->second[1]);
-					aEdge.emplace_back(m_oldMapNewEdge.find(itemm)->second[2]);
-				}
-			}
-			m_oldMapNewEdge[itemm] = aEdge;
-			aEdge.clear();
-		}
-	}
 }
 // 函数计算两面夹角
 bool SheetFlattenProcess::CalculateAngleBetweenFaces(const TopoDS_Face& theBaseFace, const TopoDS_Face& theTarFace, double& angle) {
@@ -2729,7 +2555,8 @@ void SheetFlattenProcess::generate()
 				TopoDS_Edge aTarEdge = it.getOldEdge_2d();
 				if (aBaseEdge != aTarEdge)
 				{
-					if (EdgeIntersect(aBaseEdge, aTarEdge))
+					gp_Pnt interPoint;
+					if (AreEdgesIntersecting(aBaseEdge, aTarEdge, interPoint))
 					{
 						if (it.isOverlapeEdge() && item.isOverlapeEdge())
 						{
@@ -2946,18 +2773,6 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 
 	}
 }
-bool SheetFlattenProcess::getAdjFace(TopoDS_Edge edge, vector<TopoDS_Face>& result)
-{
-	auto it = m_MapEdgeAdjFaces.find(edge);
-	if (it != m_MapEdgeAdjFaces.end())
-	{
-		vector<TopoDS_Face> temp(it->second.begin(), it->second.end());
-		result = temp;
-
-		return true;
-	}
-	return false;
-}
 //端点是否相同
 bool SheetFlattenProcess::AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2) {
 	// 获取第一条边的两个端点
@@ -2977,29 +2792,5 @@ bool SheetFlattenProcess::AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const 
 	bool sameEndStart = p1_1.IsEqual(p2_2, Precision::Confusion()) && p1_2.IsEqual(p2_1, Precision::Confusion());
 
 	return sameStartEnd || sameEndStart;
-}
-void SheetFlattenProcess::findSameEdge(map<TopoDS_Edge, TopoDS_Edge>& result)
-{
-	TopoDS_Edge aBaseEdge, aTarEdge;
-	set<TopoDS_Edge> aMapFinishEdge;
-	for (auto elem : m_ThreeToTwoEdge)
-	{
-		aBaseEdge = elem.first;
-		//aMapFinishEdge.insert(aBaseEdge);
-		for (auto it : m_ThreeToTwoEdge)
-		{
-			aTarEdge = it.first;
-			if (aMapFinishEdge.find(aTarEdge) != aMapFinishEdge.end() || aBaseEdge == aTarEdge)
-				continue;
-			if (AreEdgesSameEndpoints(aBaseEdge, aTarEdge))
-			{
-				result[aBaseEdge] = aTarEdge;
-				aMapFinishEdge.insert(aBaseEdge);
-				aMapFinishEdge.insert(aTarEdge);
-			}
-			//aMapFinishEdge.insert(aTarEdge);
-		}
-	}
-	return;
 }
 #endif

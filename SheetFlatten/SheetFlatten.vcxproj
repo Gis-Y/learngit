@@ -72,7 +72,7 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(ProjectDir)eigen3;D:\OCC\install\inc;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\OCC\install\win64\vc14\libd;D:\1_work\SheetFlatten\OneStep;D:\OCC\build\win64\vc14\libd;$(LibraryPath)</LibraryPath>
+    <LibraryPath>D:\OCC\install\win64\vc14\libd;D:\OCC\build\win64\vc14\libd;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(ProjectDir)eigen3;E:\OpenCASCADE-7.8.0-vc143-64\opencascade-7.8.0\inc;$(IncludePath)</IncludePath>
@@ -117,7 +117,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>libonestep.lib;DRAWEXE.lib;ExpToCasExe.lib;TKBin.lib;TKBinL.lib;TKBinTObj.lib;TKBinXCAF.lib;TKBO.lib;TKBool.lib;TKBRep.lib;TKCAF.lib;TKCDF.lib;TKDCAF.lib;TKDE.lib;TKDECascade.lib;TKDEGLTF.lib;TKDEIGES.lib;TKDEOBJ.lib;TKDEPLY.lib;TKDESTEP.lib;TKDESTL.lib;TKDEVRML.lib;TKDraw.lib;TKernel.lib;TKExpress.lib;TKFeat.lib;TKFillet.lib;TKG2d.lib;TKG3d.lib;TKGeomAlgo.lib;TKGeomBase.lib;TKHLR.lib;TKLCAF.lib;TKMath.lib;TKMesh.lib;TKMeshVS.lib;TKOffset.lib;TKOpenGl.lib;TKOpenGlTest.lib;TKPrim.lib;TKQADraw.lib;TKRWMesh.lib;TKService.lib;TKShHealing.lib;TKStd.lib;TKStdL.lib;TKTObj.lib;TKTObjDRAW.lib;TKTopAlgo.lib;TKTopTest.lib;TKV3d.lib;TKVCAF.lib;TKViewerTest.lib;TKXCAF.lib;TKXDEDRAW.lib;TKXMesh.lib;TKXml.lib;TKXmlL.lib;TKXmlTObj.lib;TKXmlXCAF.lib;TKXSBase.lib;TKXSDRAW.lib;TKXSDRAWDE.lib;TKXSDRAWGLTF.lib;TKXSDRAWIGES.lib;TKXSDRAWOBJ.lib;TKXSDRAWPLY.lib;TKXSDRAWSTEP.lib;TKXSDRAWSTL.lib;TKXSDRAWVRML.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>F:\project\DingHeng\SheetFlatten\OneStep;E:\OpenCASCADE-7.8.0-vc143-64\opencascade-7.8.0\win64\vc14\libd</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>D:\2_learnGit\SheetFlatten\OneStep</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -148,7 +148,6 @@
     <ClInclude Include="SheetFlattenCore.h" />
     <ClInclude Include="SheetFlattenEdgeData.h" />
     <ClInclude Include="SheetFlattenFitting.h" />
-    <ClInclude Include="SheetFlattenMove.h" />
     <ClInclude Include="SheetFlattenOnestep.h" />
     <ClInclude Include="SheetFlattenProcess.h" />
   </ItemGroup>

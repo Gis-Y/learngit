@@ -33,7 +33,6 @@
 #include "tcl_5.0.6/tree.h"
 #include "SheetFlattenBase.h"
 #include "SheetFlattenFitting.h"
-#include "SheetFlattenMove.h"
 #include"SheetFlattenEdgeData.h"
 #include"SheetFlattenProcess.h"
 
@@ -116,7 +115,6 @@ private:
 	vector<vector<SheetFlattenEdgeData>> m_vEdgeDatas;
 	vector<SheetFlattenEdgeData> m_EdgeDatas;
 	SheetFlattenEdgeData m_EdgeData;
-	SheetFalttenMove aFalttenMove;
 private:
 	vector<Standard_Integer> m_SoltListId;
 	vector<Standard_Integer> m_SplitListId;
@@ -183,7 +181,6 @@ inline int SheetFlattenCore::Perform()
 			if (find(m_SoltListId.begin(), m_SoltListId.end(), id) != m_SoltListId.end())
 			{
 				m_mapSoltEdges.insert(edge);
-				aFalttenMove.m_slotEdges_3d.emplace_back(edge);
 			}
 			if (find(m_SplitListId.begin(), m_SplitListId.end(), id) != m_SplitListId.end())
 			{
@@ -191,11 +188,6 @@ inline int SheetFlattenCore::Perform()
 			}
 		}
 		BuildFacesAngleMap();
-		for (auto elem : mapEdgeAdjFaces)
-		{
-			vector<TopoDS_Face> face(elem.second.begin(), elem.second.end());
-			aFalttenMove.m_MapEdgeAdjFaces[elem.first] = face;
-		}
 
 		if (!BuildFlattenTree(objShape))
 		{
@@ -486,7 +478,7 @@ inline bool SheetFlattenCore::BuildFlattenTree(const TopoDS_Shape& objShape)
 
 			//rootNode.flattenFace.DumpNasEx("F:\\FaceInit_" + to_string(faceid) + ".nas", 0);
 
-			string nasFile = "E:\\FaceOnestep_" + to_string(faceid++) + ".nas";
+			string nasFile = "D:\\FaceOnestep_" + to_string(faceid++) + ".nas";
 
 			//rootNode.flattenFace.DumpNasEx(nasFile, 1);
 		}
@@ -652,7 +644,7 @@ inline void SheetFlattenCore::BuildFlattenTreeNode(tree<FlattenFaceNode>::iterat
 
 			//_node.flattenFace.DumpNasEx("F:\\FaceInit_" + to_string(faceid) + ".nas", 0);
 			_node.flattenFace.OneStepFlattenFace();
-			string nasFile = "E:\\FaceOnestep_" + to_string(faceid++) + ".nas";
+			string nasFile = "D:\\FaceOnestep_" + to_string(faceid++) + ".nas";
 			//_node.flattenFace.DumpNasEx(nasFile, 1);
 			_node.id = ++refId;
 			finishedFaces.insert(*faceIt);
@@ -688,7 +680,7 @@ inline void SheetFlattenCore::Jigsaw(tree<FlattenFaceNode>::iterator fatherIt)
 
 		lit.node()->get()->flattenFace.Jigsaw(fatherFlattenNode->StartNode2D(), fatherFlattenNode->EndNode2D());
 
-		string nasFile = "E:\\FaceJigsaw_" + to_string(faceid++) + ".nas";
+		string nasFile = "D:\\FaceJigsaw_" + to_string(faceid++) + ".nas";
 
 		//lit.node()->get()->flattenFace.DumpNasEx(nasFile, 3);
 	}
@@ -707,10 +699,6 @@ inline void SheetFlattenCore::Fitting(tree<FlattenFaceNode>::iterator it)
 
 		//lit.node()->get()->flattenFace.CreateOutline(aCompound,m_flat, aFalttenMove.m_ThreeToTwoEdge);
 		lit.node()->get()->flattenFace.CreateOutline(aCompound, m_flat, m_m3dTo2d);
-		for (auto it : aFalttenMove.m_ThreeToTwoEdge)
-		{
-			aFalttenMove.m_TwoToThreeEdge[it.second] = it.first;
-		}
 		// aBuilder.Add(aCompound, lit.node()->get()->flattenFace.CreateOutline());
 	}
 
