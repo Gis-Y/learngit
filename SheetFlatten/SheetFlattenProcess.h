@@ -360,8 +360,8 @@ void SheetFlattenProcess::translateLapel(const double theDistance)
 
 			IsEdgesAtIntersection(aBaseEdge, aLapelEdge1, aInterPoint);
 			calTranslateOriention(aBaseEdge, aInterPoint, aTranslation, theDistance);
-			aTranslateLaterEdge1 = TranslateEdge(aLapelNewEdge1, aTranslation);
-			aTranslateLaterEdge2 = TranslateEdge(aLapelNewEdge2, aTranslation);
+			aTranslateLaterEdge1 = MoveEdge(aLapelNewEdge1, aTranslation);
+			aTranslateLaterEdge2 = MoveEdge(aLapelNewEdge2, aTranslation);
 
 
 			TrimEdgesAtIntersection1(aTranslateLaterEdge1, aTranslateLaterEdge2, aInterPoint);
@@ -2203,7 +2203,7 @@ void SheetFlattenProcess::moveSplitEdge()
 				gp_Trsf translation;
 				translation.SetTranslation(translationVec);
 
-				TopoDS_Edge newedge = TranslateEdge(it.getOldEdge_2d(), translation);
+				TopoDS_Edge newedge = MoveEdge(it.getOldEdge_2d(), translation);
 				changeMapIdex(it.getOldEdge_2d(), newedge);
 				it.setOldEdge_2d(newedge);
 			}
@@ -2581,19 +2581,39 @@ void SheetFlattenProcess::generate()
 	check();
 
 	processOutline();
-	/*makeLapelMap();
-	translateLapel(1.);
-	wrapAngle();*/
 	check();
 }
+
+bool AreVectorsNearlyParallel(const gp_Vec& vec1, const gp_Vec& vec2, double angleThresholdDegrees) {
+	// 将阈值角度从度数转换为弧度
+	double angleThresholdRadians = angleThresholdDegrees * M_PI / 180.0;
+
+	// 计算向量的点积和模
+	double dotProduct = vec1.Dot(vec2);
+	double magnitudeProduct = vec1.Magnitude() * vec2.Magnitude();
+
+	// 检查零向量情况
+	if (magnitudeProduct < 1e-7) {
+		return false; // 零向量无法比较方向
+	}
+
+	// 计算 cos(theta)
+	double cosTheta = dotProduct / magnitudeProduct;
+
+	// 判断是否基本同向
+	return cosTheta > std::cos(angleThresholdRadians);
+}
+
 void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge, const gp_Trsf& translation, bool theMove)
 {
+	SheetFlattenEdgeData* aEdgadata = nullptr;
+	vector<TopoDS_Edge> aEdges;
+	vector<TopoDS_Edge> tempedge;
+	gp_Pnt overPoint, oldOtherPoint, otherPoint;
+	TopoDS_Edge newEdge;
 	for (auto it : theMoveEdge)
 	{
-		SheetFlattenEdgeData* aEdgadata = nullptr;
 		quiryEdgeData(it, aEdgadata);
-		vector<TopoDS_Edge> aEdges;
-		vector<TopoDS_Edge> tempedge;
 		aEdgadata->getVector_newEdge_2d(tempedge);
 		if (theMove)
 		{
@@ -2602,9 +2622,24 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 				if (!aEdgadata->isFirstMoveOverlapeEdge())
 				{
 					aEdgadata->setFirstMoveOverlapeEdge(true);
-					gp_Pnt otherpiont = findOtherPoint(aEdgadata->getNewEdge_2d(), aEdgadata->getOverLapEdge_Point());
-					otherpiont.Transform(translation);
-					TopoDS_Edge newEdge = BRepBuilderAPI_MakeEdge(aEdgadata->getOverLapEdge_Point(), otherpiont);
+					overPoint = aEdgadata->getOverLapEdge_Point();
+					otherPoint = findOtherPoint(aEdgadata->getNewEdge_2d(), overPoint);
+					oldOtherPoint = otherPoint;
+					gp_Vec baseVec(otherPoint, overPoint);
+					otherPoint.Transform(translation);
+					gp_Vec tarVec(oldOtherPoint, otherPoint);
+					if (AreVectorsNearlyParallel(baseVec, tarVec, 1.))
+					{
+						newEdge = BRepBuilderAPI_MakeEdge(overPoint, otherPoint);
+					}
+					else
+					{
+						aEdgadata->setFirstMoveOverlapeEdge(false);
+						overPoint.Transform(translation);
+						newEdge = BRepBuilderAPI_MakeEdge(overPoint, otherPoint);
+						aEdgadata->setOverLapEdge_Point(overPoint);
+
+					}
 					aEdges.emplace_back(newEdge);
 					aEdgadata->setVector_newEdge_2d(aEdges);
 					aEdges.clear();
@@ -2615,15 +2650,25 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 					gp_Pnt aBasePoint = aEdgadata->getOverLapEdge_Point();
 					aBasePoint.Transform(translation);
 					aEdgadata->setOverLapEdge_Point(aBasePoint);
+					for (auto elem : tempedge)
+					{
+						TopoDS_Edge newedge = MoveEdge(elem, translation);
+						aEdges.emplace_back(newedge);
+					}
+					aEdgadata->setVector_newEdge_2d(aEdges);
+					aEdges.clear();
 				}
 			}
-			for (auto elem : tempedge)
+			else
 			{
-				TopoDS_Edge newedge = MoveEdge(elem, translation);
-				aEdges.emplace_back(newedge);
+				for (auto elem : tempedge)
+				{
+					TopoDS_Edge newedge = MoveEdge(elem, translation);
+					aEdges.emplace_back(newedge);
+				}
+				aEdgadata->setVector_newEdge_2d(aEdges);
+				aEdges.clear();
 			}
-			aEdgadata->setVector_newEdge_2d(aEdges);
-			aEdges.clear();
 		}
 		else
 		{
@@ -2654,7 +2699,7 @@ void SheetFlattenProcess::generateMidleEdge(const vector<TopoDS_Edge>& theMoveEd
 			TopoDS_Edge newedge, aSoltEdge1, aSoltEdge2;
 			if (aEdgadata->isSoltEdge())
 			{
-				newedge = TranslateEdge(tempedge, theTranslation_slot);
+				newedge = MoveEdge(tempedge, theTranslation_slot);
 			}
 			else {
 				//newedge = TranslateEdge(tempedge, theTranslation);
