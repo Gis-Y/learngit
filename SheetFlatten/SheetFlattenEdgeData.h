@@ -21,6 +21,7 @@
 #include <Poly_PolygonOnTriangulation.hxx>
 
 #include <vector>
+#include<unordered_set>
 using namespace std;
 
 class SheetFlattenEdgeData
@@ -77,9 +78,15 @@ public:
     void setVector_interseEdge_2d(const vector<TopoDS_Edge>& edges) { m_vector_interseEdge_2d = edges; }
 
     // Getter and Setter for vector_sameFaceEdge_2d
-    vector<TopoDS_Edge> getVector_sameFaceEdge_2d() { return  m_vector_sameFaceEdge_2d; }
-    const vector<TopoDS_Edge>& getVector_sameFaceEdge_2d() const { return  m_vector_sameFaceEdge_2d; }
-    void setVector_sameFaceEdge_2d(const vector<TopoDS_Edge>& edges) { m_vector_sameFaceEdge_2d = edges; }
+    vector<TopoDS_Edge> getVector_sameFaceEdge_uninterseEdge_2d() { return  m_vector_sameFaceEdge_uninterseEdge_2d; }
+    const vector<TopoDS_Edge>& getVector_sameFaceEdge_uninterseEdge_2d() const { return  m_vector_sameFaceEdge_uninterseEdge_2d; }
+    void setVector_sameFaceEdge_uninterseEdge_2d(const vector<TopoDS_Edge>& edges) { m_vector_sameFaceEdge_uninterseEdge_2d = edges; }
+
+
+    unordered_set<TopoDS_Edge> getVector_sameFaceEdge_2d() { return  m_vector_sameFaceEdge_2d; }
+    const unordered_set<TopoDS_Edge>& getVector_sameFaceEdge_2d() const { return  m_vector_sameFaceEdge_2d; }
+    void setVector_sameFaceEdge_2d(const unordered_set<TopoDS_Edge>& edges) { m_vector_sameFaceEdge_2d = edges; }
+
 
     // Getter and Setter for vector_interseEdge_new2d
     vector<TopoDS_Edge> getVector_interseEdge_new2d() { return  m_vector_interseEdge_new2d; }
@@ -117,8 +124,12 @@ public:
     void setAngle(double ang) { m_angle = ang; }
 
     // Getter and Setter for OutlineEdge
-    TopoDS_Edge getOutlineEdge() const { return  m_OutlineEdge; }
+    TopoDS_Edge getOutlineEdge() { return  m_OutlineEdge; }
     void setOutlineEdge(const TopoDS_Edge& edge) { m_OutlineEdge = edge; }
+
+
+    bool getOverlapeOutlineEdge(TopoDS_Edge& edge) { if (m_OverlapeEdge.IsNull())return false; edge = m_OverlapeEdge; return true; }
+    void setOverlapeOutlineEdge(const TopoDS_Edge& edge) { m_OverlapeEdge = edge; }
 
     // Getter and Setter for overLapEdge_Point
     gp_Pnt getOverLapEdge_Point() const { return  m_overLapEdge_Point; }
@@ -145,6 +156,9 @@ public:
 
     void setFirstMoveOverlapeEdge(bool data) { m_bFirstMoveOverlapeEdge = data; }
     bool isFirstMoveOverlapeEdge() { return m_bFirstMoveOverlapeEdge; }
+
+    void setTranslateType(bool data) { m_bTranslateType = data; }
+    bool isTranslateType() { return m_bTranslateType; }
 
 
     void SetCurveType(CurveType type) {
@@ -191,7 +205,7 @@ public:
         m_bSplitEdge = false;
         m_bSoltEdge = false;
         m_vector_interseEdge_2d.clear();
-        m_vector_sameFaceEdge_2d.clear();
+        m_vector_sameFaceEdge_uninterseEdge_2d.clear();
         m_vector_sameFace_interseEdge_2d.clear();
 
     }
@@ -204,7 +218,8 @@ private:
 	vector<TopoDS_Face> m_vector_face;
 	vector<TopoDS_Edge> m_vector_sameFace_interseEdge_2d;//共面且相交
 	vector<TopoDS_Edge> m_vector_interseEdge_2d;//只相交，无所谓共面
-	vector<TopoDS_Edge> m_vector_sameFaceEdge_2d;//共面但不相交
+	vector<TopoDS_Edge> m_vector_sameFaceEdge_uninterseEdge_2d;//共面但不相交
+    unordered_set<TopoDS_Edge> m_vector_sameFaceEdge_2d;//共面的任意线
 	vector<TopoDS_Edge> m_vector_interseEdge_new2d;//共面且相交判断条件在新二维的基础上
 	bool m_bMidleEdge;
 	bool m_bOverlapeEdge;
@@ -223,7 +238,9 @@ private:
     int m_parallelNumber = 0;
     pair<int, int> m_SplitIndex;
 	TopoDS_Edge m_OutlineEdge;
+    TopoDS_Edge m_OverlapeEdge;
 	gp_Pnt m_overLapEdge_Point;
+    bool m_bTranslateType = false;
 public:
     SheetFlattenEdgeData()
 		:m_bMidleEdge(false), m_bOverlapeEdge(false), m_bSoltEdge(false), m_angle(0.), m_bFinish(false), m_bBendEdge(false), m_bSplitEdge(false)

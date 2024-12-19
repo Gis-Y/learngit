@@ -17,13 +17,24 @@
 #include <GeomAPI_ExtremaCurveCurve.hxx>
 #include <BRepExtrema_DistShapeShape.hxx>
 #include <TopoDS_Shape.hxx>
-
-
+#include <GeomAPI_PointsToBSpline.hxx>
+#include <Geom_Circle.hxx>
+#include <gp_Circ.hxx>
 #include<GeomAPI_IntCS.hxx>
+
+
+
+#include <BRep_Tool.hxx>
+#include <Geom_Curve.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <TColgp_Array1OfPnt.hxx>
+#include <gp_Pnt.hxx>
+#include <stdexcept>
+
 
 #include "SheetFlattenEdgeData.h"
 
-
+#include <algorithm>
 #include <iostream>
 #include <vector>
 #include<map>
@@ -46,6 +57,7 @@ public:
 
 private:
 	void moveSplitEdge();
+	TopoDS_Edge translateEdge(const TopoDS_Edge& edge, const gp_Trsf& translation);
 	void processEdges_WrapAngle();
 	void processSplitEdge();
 	void QuirySplitEdge();
@@ -56,9 +68,8 @@ private:
 	TopoDS_Edge midleLine(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
 	void FindEdgesOnBothSides(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& baseEdge,
 		std::vector<TopoDS_Edge>& leftEdges, std::vector<TopoDS_Edge>& rightEdges, std::vector<TopoDS_Edge>& colines, std::vector<TopoDS_Edge>& otherlines);
-	void calTranslate(const double distance, gp_Trsf& translation, const double& angle);
+	void calTranslate(const double distance, gp_Trsf& translation, const double& angle);//无用可以注释
 	TopoDS_Edge calRetractTranslate(SheetFlattenEdgeData &theEdge, const TopoDS_Face& theFace, const double theDistance, double theAngle);
-	TopoDS_Edge TranslateEdge(const TopoDS_Edge& edge, const gp_Trsf& translation);
 	bool CalculateAngleBetweenFaces(const vector<TopoDS_Face>& face, double& angle);
 	bool CalculateAngleBetweenFaces(const TopoDS_Face& theBaseFace, const TopoDS_Face& theTarFace, double& angle);
 	void moveEdge(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& edge);
@@ -67,20 +78,20 @@ private:
 	void generateMidleEdge(const vector<TopoDS_Edge>& theMoveEdge, const gp_Trsf& translation, const gp_Trsf& theTranslation_slot);
 	void generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge, const gp_Trsf& translation, bool theMove);
 	void generateSoltEdge(const TopoDS_Edge& theEdge);
-	void SheetFlattenProcess::gerateNegativeBend(SheetFlattenEdgeData*& pEdgedata);
+	void gerateNegativeBend(SheetFlattenEdgeData*& pEdgedata);
 	void generateOverlapEdge(const TopoDS_Edge& theEdge);
 	bool SegmentsOverlap(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, TopoDS_Edge& newEdge1, TopoDS_Edge& newEdge2,
 		gp_Pnt& newPoint1, gp_Pnt& newPoint2, gp_Pnt& startPoint1, gp_Pnt& startPoint2, gp_Vec& directionVec1, gp_Vec& directionVec2);
 	void processFlotInVec(gp_Vec& normalVec);
 	gp_Vec CalMoveVector(const gp_Pnt& p1, const gp_Pnt& p2, const gp_Pnt& p);
-	void calTranslate(SheetFlattenEdgeData& theEdge, const TopoDS_Face& theFace, gp_Vec& theVec);
+	bool calTranslate(SheetFlattenEdgeData& theEdge, const TopoDS_Face& theFace, gp_Vec& theVec);
 	int GetPointSide1(const gp_Pnt& baseStart, const gp_Pnt& baseEnd, const gp_Pnt& point);
 	int GetPointSide(const gp_Pnt& baseStart, const gp_Pnt& baseEnd, const gp_Pnt& point);
 	void allReation2dNewEdge();
-	bool judgeless(double x, double y);
-	bool EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
-	bool TrimEdgesAtIntersection1(TopoDS_Edge& theEdge1, TopoDS_Edge& theEdge2, gp_Pnt& theIntersection);
-	bool TrimEdgesAtIntersection(TopoDS_Edge& theEdge1, TopoDS_Edge& theEdge2, gp_Pnt& theIntersection);
+	bool judgeless(double x, double y);//无用可以注释
+	bool EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);//无用可以注释
+	bool TrimEdgesAtIntersection1(TopoDS_Edge& theEdge1, TopoDS_Edge& theEdge2, gp_Pnt& theIntersection);//无用可以注释
+	bool TrimEdgesAtIntersection(TopoDS_Edge& theEdge1, TopoDS_Edge& theEdge2, gp_Pnt& theIntersection);//无用可以注释
 	TopoDS_Edge TranslatePositiveEdge(const TopoDS_Edge& edge, const gp_Trsf& translation, TopoDS_Edge& theNewEdge, TopoDS_Edge& theNewEdge2);
 	gp_Pnt GetPerpendicularFootPoint(const gp_Pnt& point, const TopoDS_Edge& edge);
 	bool quiryNewEdge_2d(TopoDS_Edge& baseEdge, TopoDS_Edge& tarEdge);
@@ -95,11 +106,6 @@ private:
 	bool isSameFace(const vector<TopoDS_Face>& theLeftFaces, const vector<TopoDS_Face>& theRightFaces);
 	bool AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
 	bool IsEdgesAtIntersection(TopoDS_Edge& edge1, TopoDS_Edge& edge2, gp_Pnt& intersection);
-	bool findMap_EdgeAndVectorFace_ToFace(const map < TopoDS_Edge, vector<TopoDS_Face>>& theMap, const TopoDS_Edge& theEdge, TopoDS_Face& theFace);
-	bool findMap_EdgeAndVEctorFace_ToVectorFace(const map<TopoDS_Edge, vector<TopoDS_Face>>& theMap, const TopoDS_Edge& theEdge, vector<TopoDS_Face>& theFaces);
-	bool findMap_EdgeAndEdge_ToEdge(const map<TopoDS_Edge, TopoDS_Edge>& theMapEdges, const TopoDS_Edge& theTarEdge_2d, TopoDS_Edge& theTarEdge_3d);
-	bool findMap_EdgeAndVector_ToEdge(const map<TopoDS_Edge, vector<TopoDS_Edge>>& MapEdge, const TopoDS_Edge& theOldEdge, TopoDS_Edge& theNewEdge);
-	bool findMap_EdgeAndVector_ToVector(const map<TopoDS_Edge, vector<TopoDS_Edge>>& MapEdge, const TopoDS_Edge& theOldEdge, vector<TopoDS_Edge>& theVector);
 	void calTranslateOriention(const TopoDS_Edge& theEdge, const gp_Pnt& thePoint, gp_Trsf& theTranslation, const double theDistance);
 public:
 	void check();
@@ -139,31 +145,245 @@ void SheetFlattenProcess::changeMapIdex(const TopoDS_Edge& oldEdge, const TopoDS
 	}
 }
 
-TopoDS_Edge MoveEdge(const TopoDS_Edge& edge, const gp_Trsf& translation) {
-	// 获取边的几何曲线
+// 判断两条线段是否近乎平行
+bool areEdgesNearlyParallel(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, double angleThresholdDegrees) {
+	// 提取边的端点
+	Standard_Real f1, l1, f2, l2;
+	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, f1, l1);
+	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, f2, l2);
 
-	TopoDS_Vertex v1 = TopExp::FirstVertex(edge);  // 获取起点
-	TopoDS_Vertex v2 = TopExp::LastVertex(edge);   // 获取终点
-	gp_Vec translationVec = translation.TranslationPart();
-	gp_Pnt p1 = BRep_Tool::Pnt(v1);  // 获取起点坐标
-	gp_Pnt p2 = BRep_Tool::Pnt(v2);
-	TopoDS_Edge aEdge = BRepBuilderAPI_MakeEdge(p1, p2);
+	if (curve1.IsNull() || curve2.IsNull()) {
+		std::cerr << "无法提取曲线，检查输入的边是否有效。" << std::endl;
+		return false;
+	}
+
+	// 获取两条边的起点和终点
+	gp_Pnt p1Start, p1End, p2Start, p2End;
+	curve1->D0(f1, p1Start);
+	curve1->D0(l1, p1End);
+	curve2->D0(f2, p2Start);
+	curve2->D0(l2, p2End);
+
+	// 计算方向向量
+	gp_Vec vec1(p1Start, p1End);
+	gp_Vec vec2(p2Start, p2End);
+
+	// 检查向量长度是否有效
+	if (vec1.Magnitude() < 1e-7 || vec2.Magnitude() < 1e-7) {
+		std::cerr << "方向向量长度过小，无法计算平行性。" << std::endl;
+		return false;
+	}
+
+	// 计算点积和余弦值
+	Standard_Real dotProduct = vec1.Dot(vec2);
+	Standard_Real cosTheta = dotProduct / (vec1.Magnitude() * vec2.Magnitude());
+
+	// 余弦的绝对值接近1表示近乎平行（夹角接近0或180度）
+	double cosThreshold = std::cos(angleThresholdDegrees * (M_PI / 180.0));
+
+	bool data = std::abs(cosTheta) >= cosThreshold;
+	return std::abs(cosTheta) >= cosThreshold;
+}
+
+bool FindIntersectionAndExtend(TopoDS_Edge& edge1,TopoDS_Edge& edge2,gp_Pnt& intersectionPoint) 
+{
+	// 创建求交对象
+	Standard_Real baseFirst, baseLast, tarFirst, tarLast;
+	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, baseFirst, baseLast);
+	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, tarFirst, tarLast);
+
+	GeomAPI_ExtremaCurveCurve extrema(curve1, curve2);
+
+	if (extrema.NbExtrema() == 0) {
+		std::cerr << "No intersection found!" << std::endl;
+		return false;
+	}
+
+	// 遍历找到最近点对
+	for (int i = 1; i <= extrema.NbExtrema(); ++i) {
+
+
+		try {
+			Standard_Real distance = extrema.Distance(i);
+
+			// 检查距离是否在容差范围内
+			if (distance < Precision::Confusion()) {
+				gp_Pnt interPoint1, interPoint2;
+				extrema.Points(i, interPoint1, interPoint2);
+
+				// 记录交点
+				intersectionPoint = interPoint1;
+				Standard_Real param1, param2;
+				extrema.Parameters(i, param1, param2);
+
+				if (fabs(param1 - baseFirst) > fabs(param1 - baseLast))
+				{
+					edge1 = BRepBuilderAPI_MakeEdge(curve1, baseFirst, param1).Edge();
+				}
+				else
+				{
+					edge1 = BRepBuilderAPI_MakeEdge(curve1, baseLast, param1).Edge();
+				}
+
+
+				// 延长直线
+
+				if (fabs(param2 - tarFirst) > fabs(param2 - tarLast))
+				{
+					edge2 = BRepBuilderAPI_MakeEdge(curve2, tarFirst, param2).Edge();
+				}
+				else
+				{
+					edge2 = BRepBuilderAPI_MakeEdge(curve2, tarLast, param2).Edge();
+				}
+
+				return true;
+			}
+		}
+		catch (Standard_Failure& err)
+		{
+			std::cerr << "Error while checking intersection: " << err.GetMessageString() << std::endl;
+			return false;
+		}
+	}
+
+	return false;
+}
+
+
+
+// 从两个边生成中间线
+TopoDS_Edge ComputeMiddleEdge(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2) {
+	// 提取两条边的几何曲线和参数范围
+	Standard_Real f1, l1, f2, l2;
+	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, f1, l1);
+	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, f2, l2);
+
+	if (curve1.IsNull() || curve2.IsNull()) {
+		throw std::invalid_argument("One or both edges have invalid curves.");
+	}
+
+	// 取两条曲线的最小公共参数范围
+	Standard_Real f = std::max(f1, f2);
+	Standard_Real l = std::min(l1, l2);
+
+	if (f >= l) {
+		throw std::invalid_argument("The edges do not overlap in parameter space.");
+	}
+
+	// 采样曲线点，计算中间点
+	const int numSamples = 50; // 采样点数
+	TColgp_Array1OfPnt middlePoints(1, numSamples);
+	for (int i = 0; i < numSamples; ++i) {
+		Standard_Real param = f + i * (l - f) / (numSamples - 1);
+		gp_Pnt p1, p2;
+		curve1->D0(param, p1);
+		curve2->D0(param, p2);
+
+		// 计算中间点
+		gp_Pnt midPoint(
+			(p1.X() + p2.X()) / 2.0,
+			(p1.Y() + p2.Y()) / 2.0,
+			(p1.Z() + p2.Z()) / 2.0
+		);
+		middlePoints.SetValue(i + 1, midPoint);
+	}
+
+	// 用中间点生成 B-spline 曲线
+	GeomAPI_PointsToBSpline bsplineBuilder(middlePoints);
+	Handle(Geom_BSplineCurve) middleCurve = bsplineBuilder.Curve();
+
+	// 用 B-spline 曲线生成边
+	return BRepBuilderAPI_MakeEdge(middleCurve).Edge();
+}
+
+
+// 提取圆弧的关键信息
+bool ExtractArcInfo(const TopoDS_Edge& edge, gp_Pnt& center, Standard_Real& radius,
+	Standard_Real& startAngle, Standard_Real& endAngle) {
+	// 提取几何曲线
 	Standard_Real first, last;
-	Handle(Geom_Curve) curve = BRep_Tool::Curve(aEdge, first, last);
+	Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
+
+	if (curve.IsNull()) {
+		std::cerr << "Failed to extract curve from edge." << std::endl;
+		return false;
+	}
+
+	// 检查是否是圆弧
+	Handle(Geom_TrimmedCurve) trimmedCurve = Handle(Geom_TrimmedCurve)::DownCast(curve);
+	Handle(Geom_Circle) circle;
+
+	if (!trimmedCurve.IsNull()) {
+		circle = Handle(Geom_Circle)::DownCast(trimmedCurve->BasisCurve());
+	}
+	else {
+		circle = Handle(Geom_Circle)::DownCast(curve);
+	}
+
+	if (circle.IsNull()) {
+		std::cerr << "The edge is not a circular arc." << std::endl;
+		return false;
+	}
+
+	// 获取圆的信息
+	gp_Circ circ = circle->Circ();
+	center = circ.Location();          // 圆心
+	radius = circ.Radius();            // 半径
+
+	// 计算起始和终止角度（基于参数范围）
+	gp_Dir xDir = circ.XAxis().Direction(); // 圆的X方向
+	gp_Dir yDir = circ.YAxis().Direction(); // 圆的Y方向
+
+	gp_Pnt startPoint, endPoint;
+	trimmedCurve->D0(first, startPoint);
+	trimmedCurve->D0(last, endPoint);
+
+	gp_Vec startVec(center, startPoint);
+	gp_Vec endVec(center, endPoint);
+
+	startAngle = atan2(startVec.Dot(yDir), startVec.Dot(xDir)); // 起始角度
+	endAngle = atan2(endVec.Dot(yDir), endVec.Dot(xDir));       // 终止角度
+
+	// 将角度归一化到 [0, 2π]
+	if (startAngle < 0) startAngle += 2 * M_PI;
+	if (endAngle < 0) endAngle += 2 * M_PI;
+
+	return true;
+}
+
+
+TopoDS_Edge SheetFlattenProcess::translateEdge(const TopoDS_Edge& edge, const gp_Trsf& translation) {
+	// 获取边的几何曲线
+	Standard_Real first, last;
+	Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
 
 	if (curve.IsNull()) {
 		std::cerr << "Error: The edge does not have a valid curve." << std::endl;
+		return TopoDS_Edge(); // 返回空的 Edge
 	}
 
+	try {
+		// 对曲线应用平移
+		Handle(Geom_Curve) movedCurve = Handle(Geom_Curve)::DownCast(curve->Transformed(translation));
 
-	// 对曲线应用平移
-	Handle(Geom_Curve) movedCurve = Handle(Geom_Curve)::DownCast(curve->Transformed(translation));
+		if (movedCurve.IsNull()) {
+			std::cerr << "Error: Transformation failed on curve." << std::endl;
+			return TopoDS_Edge(); // 返回空的 Edge
+		}
 
-	// 构造一个新的边，保持原始参数
-	TopoDS_Edge movedEdge = BRepBuilderAPI_MakeEdge(movedCurve, first, last);
-	return movedEdge;
-
+		// 构造一个新的边，保持原始参数
+		TopoDS_Edge movedEdge = BRepBuilderAPI_MakeEdge(movedCurve, first, last);
+		return movedEdge;
+	}
+	catch (const Standard_Failure& e) {
+		std::cerr << "Exception occurred: " << e.GetMessageString() << std::endl;
+		return TopoDS_Edge(); // 返回空的 Edge
+	}
 }
+
+
+
 
 bool SheetFlattenProcess::quiryEdgeData(const TopoDS_Edge & baseEdge,SheetFlattenEdgeData*& data)
 {
@@ -360,14 +580,18 @@ void SheetFlattenProcess::translateLapel(const double theDistance)
 
 			IsEdgesAtIntersection(aBaseEdge, aLapelEdge1, aInterPoint);
 			calTranslateOriention(aBaseEdge, aInterPoint, aTranslation, theDistance);
-			aTranslateLaterEdge1 = MoveEdge(aLapelNewEdge1, aTranslation);
-			aTranslateLaterEdge2 = MoveEdge(aLapelNewEdge2, aTranslation);
+			aTranslateLaterEdge1 = translateEdge(aLapelNewEdge1, aTranslation);
+			aTranslateLaterEdge2 = translateEdge(aLapelNewEdge2, aTranslation);
 
 
-			TrimEdgesAtIntersection1(aTranslateLaterEdge1, aTranslateLaterEdge2, aInterPoint);
+			FindIntersectionAndExtend(aTranslateLaterEdge1, aTranslateLaterEdge2, aInterPoint);
+
+			FindIntersectionAndExtend(aTranslateLaterEdge1, aNewLapelInterEdge1, aInterPoint);
+			FindIntersectionAndExtend(aTranslateLaterEdge2, aNewLapelInterEdge2, aInterPoint);
+			/*TrimEdgesAtIntersection1(aTranslateLaterEdge1, aTranslateLaterEdge2, aInterPoint);
 
 			TrimEdgesAtIntersection1(aTranslateLaterEdge1, aNewLapelInterEdge1, aInterPoint);
-			TrimEdgesAtIntersection1(aTranslateLaterEdge2, aNewLapelInterEdge2, aInterPoint);
+			TrimEdgesAtIntersection1(aTranslateLaterEdge2, aNewLapelInterEdge2, aInterPoint);*/
 
 			pEdgedata1->insertEdgeTo_new2d(aTranslateLaterEdge1);
 			pEdgedata2->insertEdgeTo_new2d(aTranslateLaterEdge2);
@@ -408,17 +632,7 @@ void SheetFlattenProcess::translateLapel(const double theDistance)
 		}
 	}
 }
-bool SheetFlattenProcess::findMap_EdgeAndVector_ToVector(const map<TopoDS_Edge, vector<TopoDS_Edge>>& MapEdge, const TopoDS_Edge& theOldEdge, vector<TopoDS_Edge>& theVector)
-{
-	theVector.clear();
-	if (MapEdge.find(theOldEdge) != MapEdge.end())
-	{
-		auto iter = MapEdge.find(theOldEdge);
-		theVector = iter->second;
-		return true;
-	}
-	return false;
-}
+
 
 
 bool SheetFlattenProcess::isSameFace(const vector<TopoDS_Face> &theLeftFaces, const vector<TopoDS_Face> &theRightFaces)
@@ -798,55 +1012,6 @@ TopoDS_Edge SheetFlattenProcess::findAdjEdge(const TopoDS_Edge &baseEdge,const v
 	
 }
 
-bool SheetFlattenProcess::findMap_EdgeAndVector_ToEdge(const map<TopoDS_Edge, vector<TopoDS_Edge>>& MapEdge, const TopoDS_Edge& theOldEdge, TopoDS_Edge& theNewEdge)
-{
-	if (MapEdge.find(theOldEdge) != MapEdge.end())
-	{
-		auto iter = MapEdge.find(theOldEdge);
-		theNewEdge = iter->second.back();
-		//theNewEdge = iter->second[0];
-		return true;
-	}
-	return false;
-}
-
-
-bool SheetFlattenProcess::findMap_EdgeAndEdge_ToEdge(const map<TopoDS_Edge, TopoDS_Edge>& theMapEdges, const TopoDS_Edge& theTarEdge_2d, TopoDS_Edge& theTarEdge_3d)
-{
-	if (theMapEdges.find(theTarEdge_2d) != theMapEdges.end())
-	{
-		theTarEdge_3d = theMapEdges.find(theTarEdge_2d)->second;
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-}
-
-bool SheetFlattenProcess::findMap_EdgeAndVectorFace_ToFace(const map < TopoDS_Edge, vector<TopoDS_Face>>& theMap, const TopoDS_Edge& theEdge, TopoDS_Face& theFace)
-{
-	if (theMap.find(theEdge) != theMap.end())
-	{
-		theFace = theMap.find(theEdge)->second[0];
-		return true;
-	}
-	else
-	{
-		return false;
-	}
-
-}
-
-bool SheetFlattenProcess::findMap_EdgeAndVEctorFace_ToVectorFace(const map<TopoDS_Edge, vector<TopoDS_Face>>& theMap, const TopoDS_Edge& theEdge, vector<TopoDS_Face>& theFaces)
-{
-	if (theMap.find(theEdge) != theMap.end())
-	{
-		theFaces = theMap.find(theEdge)->second;
-		return true;
-	}
-	return false;
-}
 // 函数：求点到直线的垂足交点
 gp_Pnt SheetFlattenProcess::GetPerpendicularFootPoint(const gp_Pnt& point, const TopoDS_Edge& edge)
 {
@@ -1128,23 +1293,6 @@ void SheetFlattenProcess::FindEdgesOnBothSides(vector<SheetFlattenEdgeData>& edg
 }
 
 
-TopoDS_Edge SheetFlattenProcess::TranslateEdge(const TopoDS_Edge& edge, const gp_Trsf& translation)
-{
-	TopoDS_Vertex v1 = TopExp::FirstVertex(edge);  // 获取起点
-	TopoDS_Vertex v2 = TopExp::LastVertex(edge);   // 获取终点
-	gp_Vec translationVec = translation.TranslationPart();
-	gp_Pnt p1 = BRep_Tool::Pnt(v1);  // 获取起点坐标
-	gp_Pnt p2 = BRep_Tool::Pnt(v2);
-	// 5. 对边的两个端点应用平移
-	p1.Transform(translation);  // 移动起点
-	p2.Transform(translation);  // 移动终点
-
-	// 6. 使用移动后的点构造新的边
-	TopoDS_Edge newEdge = BRepBuilderAPI_MakeEdge(p1, p2);
-
-	return newEdge;
-}
-
 TopoDS_Edge SheetFlattenProcess::TranslatePositiveEdge(const TopoDS_Edge& edge, const gp_Trsf& translation, TopoDS_Edge& theNewEdge1, TopoDS_Edge& theNewEdge2)
 {
 	TopoDS_Vertex v1 = TopExp::FirstVertex(edge);  // 获取起点
@@ -1168,7 +1316,7 @@ TopoDS_Edge SheetFlattenProcess::TranslatePositiveEdge(const TopoDS_Edge& edge, 
 	return newEdge;
 }
 
-void SheetFlattenProcess::calTranslate(SheetFlattenEdgeData& theEdge, const TopoDS_Face& theFace,gp_Vec & theVec)
+bool SheetFlattenProcess::calTranslate(SheetFlattenEdgeData& theEdge, const TopoDS_Face& theFace,gp_Vec & theVec)
 {
 	gp_Trsf translation;
 	TopoDS_Edge a2dBaseEdge, a2dTarEdge, a2dNewEdge, a2dInterEdge;
@@ -1185,6 +1333,7 @@ void SheetFlattenProcess::calTranslate(SheetFlattenEdgeData& theEdge, const Topo
 
 	gp_Vec normalVec;
 
+	vector<int> result;
 	for (TopExp_Explorer explorer(theFace, TopAbs_EDGE); explorer.More(); explorer.Next()) {
 		const TopoDS_Edge& currentEdge = TopoDS::Edge(explorer.Current());
 		SheetFlattenEdgeData* pCurrentEdgedata;
@@ -1206,15 +1355,21 @@ void SheetFlattenProcess::calTranslate(SheetFlattenEdgeData& theEdge, const Topo
 		if (sideStart != 0)
 		{
 			normalVec = CalMoveVector(baseStart, baseEnd, startPnt);
+			result.emplace_back(sideStart);
 		}
 		if (sideEnd != 0)
 		{
 			normalVec = CalMoveVector(baseStart, baseEnd, endPnt);
+			result.emplace_back(sideEnd);
 		}
 
 	}
 
 	theVec = normalVec;
+
+	return std::all_of(result.begin(), result.end(), [&result](int value) {
+		return value == result[0]; // 比较每个元素与第一个元素
+		});
 
 }
 //包角时朝着向量方向移动边,裁剪边
@@ -1285,12 +1440,13 @@ TopoDS_Edge SheetFlattenProcess::calRetractTranslate(SheetFlattenEdgeData & theE
 
 	translation.SetTranslation(translationVec);  // 设置平移矩阵
 
+	newEdge = translateEdge(a2dNewEdge, translation);
 	// 5. 对边的两个端点应用平移
-	p1.Transform(translation);  // 移动起点
-	p2.Transform(translation);  // 移动终点
+	//p1.Transform(translation);  // 移动起点
+	//p2.Transform(translation);  // 移动终点
 
 	// 6. 使用移动后的点构造新的边
-	newEdge = BRepBuilderAPI_MakeEdge(p1, p2);
+	//newEdge = BRepBuilderAPI_MakeEdge(p1, p2);
 	if (fabs(M_PI - theAngle) <= 1e-6)
 	{
 		return newEdge;
@@ -1307,8 +1463,9 @@ TopoDS_Edge SheetFlattenProcess::calRetractTranslate(SheetFlattenEdgeData & theE
 			SheetFlattenEdgeData* pEdgedata;
 			quiryEdgeData(elem, pEdgedata);
 			vector<TopoDS_Edge> aEdges;
-			if (pEdgedata->getVector_newEdge_2d(aEdges))
+			//if (pEdgedata->getVector_newEdge_2d(aEdges))
 			{
+				pEdgedata->getVector_newEdge_2d(aEdges);
 				if (pEdgedata->isBendEdge())
 				{
 					continue;
@@ -1316,7 +1473,8 @@ TopoDS_Edge SheetFlattenProcess::calRetractTranslate(SheetFlattenEdgeData & theE
 				//if (!isReduct)
 				{
 					a2dInterEdge = aEdges.back();
-					TrimEdgesAtIntersection1(newEdge, a2dInterEdge, intersection);
+					//TrimEdgesAtIntersection1(newEdge, a2dInterEdge, intersection);
+					FindIntersectionAndExtend(newEdge, a2dInterEdge, intersection);
 					//m_oldMapNewEdge[elem][aEdges.size()-1] = a2dInterEdge;
 					pEdgedata->insertEdgeTo_new2d(a2dInterEdge);
 				}
@@ -1492,36 +1650,11 @@ bool AreEdgesIntersecting(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp
 	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, f1, l1);
 	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, f2, l2);
 
-
-	TopoDS_Vertex v1_1 = TopExp::FirstVertex(edge1);
-	TopoDS_Vertex v1_2 = TopExp::LastVertex(edge1);
-	gp_Pnt p1_1 = BRep_Tool::Pnt(v1_1);
-	gp_Pnt p1_2 = BRep_Tool::Pnt(v1_2);
-
-	// 获取第二条线段的起点和终点
-	TopoDS_Vertex v2_1 = TopExp::FirstVertex(edge2);
-	TopoDS_Vertex v2_2 = TopExp::LastVertex(edge2);
-	gp_Pnt p2_1 = BRep_Tool::Pnt(v2_1);
-	gp_Pnt p2_2 = BRep_Tool::Pnt(v2_2);
-
-
-
 	if (curve1.IsNull() || curve2.IsNull()) {
 		std::cerr << "One or both edges have invalid curves." << std::endl;
 		return false;
 	}
 
-	// 检查曲线是否平行（通过两曲线的导数方向比较）
-	gp_Vec dir1, dir2;
-	curve1->D1(f1, gp_Pnt(), dir1);
-	curve2->D1(f2, gp_Pnt(), dir2);
-	Standard_Real dotProduct = dir1.Dot(dir2);
-	Standard_Real angle = Abs(acos(dotProduct / (dir1.Magnitude() * dir2.Magnitude())));
-
-	/*if (angle < Precision::Angular() || angle > M_PI - Precision::Angular()) {
-		std::cerr << "Edges are nearly parallel." << std::endl;
-		return false;
-	}*/
 
 	// 使用 GeomAPI_ExtremaCurveCurve 获取最近点对
 	GeomAPI_ExtremaCurveCurve extrema(curve1, curve2);
@@ -1597,12 +1730,11 @@ bool SheetFlattenProcess::EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_E
 	}
 
 	return true;
-
-
 }
 void SheetFlattenProcess::processSameFaceEdgeRelation()
 {
-	vector<TopoDS_Edge> intersectionLines, lines;
+	vector<TopoDS_Edge> intersectionLines, unintersectionLines;
+	unordered_set<TopoDS_Edge> lines;
 	gp_Pnt point;
 	for (auto &elem : m_EdgeData)
 	{
@@ -1629,15 +1761,18 @@ void SheetFlattenProcess::processSameFaceEdgeRelation()
 							intersectionLines.emplace_back(twoEdge);
 						}
 						else {
-							lines.emplace_back(twoEdge);
+							unintersectionLines.emplace_back(twoEdge);
 						}
+						lines.insert(twoEdge);
 					}
 				}
 
 			}
 			item.setVector_sameFace_interseEdge_2d(intersectionLines);
+			item.setVector_sameFaceEdge_uninterseEdge_2d(unintersectionLines);
 			item.setVector_sameFaceEdge_2d(lines);
 			intersectionLines.clear();
+			unintersectionLines.clear();
 			lines.clear();
 
 		}
@@ -1727,12 +1862,13 @@ void SheetFlattenProcess::gerateNegativeBend(SheetFlattenEdgeData*& pEdgedata)
 			quiryEdgeData(itemm, temptEdgedata);
 			temptEdgedata->getNewEdge_2d(newInterseEdge);
 			vector<TopoDS_Edge> aEdge, aVectorEdge1;
-
-			if (!EdgeIntersect(newInterseEdge, newbaseEdge))
+			gp_Pnt interPoint;
+			if (!AreEdgesIntersecting(newInterseEdge, newbaseEdge, interPoint))
 			{
 				continue;
 			}
-			TrimEdgesAtIntersection1(newbaseEdge, newInterseEdge, intersection);//延长线到交点
+			//TrimEdgesAtIntersection1(newbaseEdge, newInterseEdge, intersection);//延长线到交点
+			FindIntersectionAndExtend(newbaseEdge, newInterseEdge, intersection); 
 			//oldMapNewEdge[edge] = newsideEdge;
 			aEdge.emplace_back(newInterseEdge);
 			if (temptEdgedata->getVector_newEdge_2d(aVectorEdge1))
@@ -1776,7 +1912,8 @@ void SheetFlattenProcess::generateSoltEdge(const TopoDS_Edge& theEdge)
 		temptEdgedata->getNewEdge_2d(newInterseEdge);
 		vector<TopoDS_Edge> aEdge, aVectorEdge1;
 
-		TrimEdgesAtIntersection1(newbaseEdge, newInterseEdge, intersection);//延长线到交点
+		//TrimEdgesAtIntersection1(newbaseEdge, newInterseEdge, intersection);//延长线到交点
+		FindIntersectionAndExtend(newbaseEdge, newInterseEdge, intersection);
 
 		temptEdgedata->insertEdgeTo_new2d(newInterseEdge);
 		//oldMapNewEdge[edge] = newsideEdge;
@@ -1819,7 +1956,8 @@ void SheetFlattenProcess::generateOverlapEdge(const TopoDS_Edge& theEdge)
 			}
 			pTarEdgedata->getNewEdge_2d(newInterseEdge);
 
-			TrimEdgesAtIntersection1(newbaseEdge, newInterseEdge, intersection);//延长线到交点
+			//TrimEdgesAtIntersection1(newbaseEdge, newInterseEdge, intersection);//延长线到交点
+			FindIntersectionAndExtend(newbaseEdge, newInterseEdge, intersection);
 			//oldMapNewEdge[edge] = newsideEdge;
 			aEdge.emplace_back(newInterseEdge);
 			if (pTarEdgedata->getVector_newEdge_2d(aVectorEdge1))
@@ -2004,8 +2142,10 @@ void SheetFlattenProcess::wrapAngle()
 	double distance = 2.;
 	for (auto &elem : m_EdgeData)
 	{
+
 		for (auto &item : elem)
 		{
+			
 			for (auto& it : elem)
 			{
 				if (item.isProcessWrapAngle() || it.isProcessWrapAngle())
@@ -2032,12 +2172,14 @@ void SheetFlattenProcess::wrapAngle()
 					}
 				}
 			}
+			
 			if (item.isWrapAngle())
 			{
 				angle = item.getAngle();
 				TopoDS_Face face = item.getVector_face()[0];
 
 				calRetractTranslate(item, face, distance, angle);
+				check();
 			}
 
 		}
@@ -2070,7 +2212,7 @@ void SheetFlattenProcess::processOutline()
 						vector<TopoDS_Edge> aTarVectorNewEdges;
 						if (pTarEdgadata->getVector_newEdge_2d(aTarVectorNewEdges))
 						{
-							if (aTarVectorNewEdges.size() < 3)
+							if (!pTarEdgadata->isBendEdge())
 							{
 								if (pTarEdgadata->isOutline())
 								{
@@ -2080,7 +2222,9 @@ void SheetFlattenProcess::processOutline()
 									pTarEdgadata->getNewEdge_2d(aTarEdge);
 								}
 								gp_Pnt intersection;
-								TrimEdgesAtIntersection1(aBaseEdge, aTarEdge, intersection);
+								//TrimEdgesAtIntersection1(aBaseEdge, aTarEdge, intersection);
+
+								FindIntersectionAndExtend(aBaseEdge, aTarEdge, intersection);
 								item.setOutline(true);
 								pTarEdgadata->setOutline(true);
 								item.setOutlineEdge(aBaseEdge);
@@ -2105,35 +2249,62 @@ void SheetFlattenProcess::check()
 	TopoDS_Compound aCompound;
 	BRep_Builder aBuilder;
 	aBuilder.MakeCompound(aCompound);
+	BRepBuilderAPI_MakeWire wireBuilder;
 	for (auto elem : m_EdgeData)
 	{
 		for (auto item : elem)
 		{
 			TopoDS_Edge edge;
 			vector<TopoDS_Edge> aEdges;
+			if (item.getOverlapeOutlineEdge(edge))
+			{
+				if (edge.IsNull()) {
+					std::cerr << "Invalid edge detected!" << std::endl;
+				}
+				aBuilder.Add(aCompound, edge);
+				//wireBuilder.Add(edge);
+			}
 			if (item.isOutline())
 			{
 				edge = item.getOutlineEdge();
+				if (edge.IsNull()) {
+					std::cerr << "Invalid edge detected!" << std::endl;
+				}
 				aBuilder.Add(aCompound, edge);
+				//wireBuilder.Add(edge);
 			}
 			if (item.getVector_newEdge_2d(aEdges))
 			{
 				for (auto it : aEdges)
 				{
-					//aBuilder.Add(aCompound, it);
+					aBuilder.Add(aCompound, it);
+					//wireBuilder.Add(it);
+				
 				}
 			}
 			else
 			{
-				edge = aEdges[0];
-				aBuilder.Add(aCompound, edge);
+				for (auto it : aEdges)
+				{
+					aBuilder.Add(aCompound, it);
+					//wireBuilder.Add(it);
+
+				}
+				/*edge = aEdges[0];
+				if (edge.IsNull()) {
+					std::cerr << "Invalid edge detected!" << std::endl;
+				}
+				aBuilder.Add(aCompound, edge);*/
+				//wireBuilder.Add(edge);
 			}
 		}
-	}
-
-	for (auto& elem : m_outlindeEdges)
-	{
-		aBuilder.Add(aCompound, elem);
+		//FlattenFace::BuildDocStd(aCompound);
+		if (wireBuilder.IsDone())
+		{
+			//TopoDS_Wire wire = wireBuilder.Wire();
+			//aBuilder.Add(aCompound, wire);
+		}
+		//wireBuilder = BRepBuilderAPI_MakeWire();
 	}
 	FlattenFace::BuildDocStd(aCompound);
 }
@@ -2203,12 +2374,12 @@ void SheetFlattenProcess::moveSplitEdge()
 				gp_Trsf translation;
 				translation.SetTranslation(translationVec);
 
-				TopoDS_Edge newedge = MoveEdge(it.getOldEdge_2d(), translation);
+				TopoDS_Edge newedge = translateEdge(it.getOldEdge_2d(), translation);
 				changeMapIdex(it.getOldEdge_2d(), newedge);
 				it.setOldEdge_2d(newedge);
 			}
 		}
-		check();
+		//check();
 	}
 }
 
@@ -2254,8 +2425,8 @@ double CalculateClockwiseAngle(const gp_Vec& vec1, const gp_Vec& vec2, const gp_
 	// 计算标准夹角
 	double dotProduct = vec1 * vec2;
 	double magnitudeProduct = vec1.Magnitude() * vec2.Magnitude();
-	double angle = acos(dotProduct / magnitudeProduct); // 返回值在 [0, π]
-
+	//double angle = acos(dotProduct / magnitudeProduct); // 返回值在 [0, π]
+	double angle = std::atan2(vec1.Crossed(vec2).Magnitude(), vec1.Dot(vec2));
 	double baseAngle = angle;
 	// 使用叉乘判断方向
 	gp_Vec crossProduct = vec1.Crossed(vec2); // vec1 × vec2
@@ -2339,6 +2510,55 @@ bool AreEdgesParallel(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, double
 	return Abs(dotProduct - 1.0) < tolerance;
 }
 
+// 平移第二条 Edge 到第一条 Edge 的位置
+bool AlignEdges(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp_Trsf &trsf) {
+	// 提取第一条 Edge 的起点和终点
+	Standard_Real firstParam1, lastParam1;
+	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, firstParam1, lastParam1);
+	if (curve1.IsNull()) return false; // 如果曲线为空，返回 false
+	gp_Pnt startPnt1, endPnt1;
+	curve1->D0(firstParam1, startPnt1);
+	curve1->D0(lastParam1, endPnt1);
+
+	// 提取第二条 Edge 的起点和终点
+	Standard_Real firstParam2, lastParam2;
+	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, firstParam2, lastParam2);
+	if (curve2.IsNull()) return false; // 如果曲线为空，返回 false
+	gp_Pnt startPnt2, endPnt2;
+	curve2->D0(firstParam2, startPnt2);
+	curve2->D0(lastParam2, endPnt2);
+
+	// 计算两条线段的方向向量并归一化
+	gp_Vec dir1(startPnt1, endPnt1);
+	gp_Vec dir2(startPnt2, endPnt2);
+
+	if (dir1.Magnitude() == 0 || dir2.Magnitude() == 0) return false; // 避免零长度线段
+	dir1.Normalize();
+	dir2.Normalize();
+
+
+	gp_Vec translationVector;
+
+
+	// 计算点积判断方向是否一致
+	Standard_Real dotProduct = dir1 * dir2;
+	if (dotProduct > 0.999)
+	{
+		gp_Vec tempRanslationVector(startPnt2, startPnt1);
+		translationVector = tempRanslationVector;
+	}
+	else
+	{
+		gp_Vec tempRanslationVector(endPnt2, startPnt1);
+		translationVector = tempRanslationVector;
+	}
+	// 构建平移变换
+	trsf.SetTranslation(translationVector);
+
+
+	return true;
+}
+
 
 void SheetFlattenProcess::processSplitEdge()
 {
@@ -2350,6 +2570,8 @@ void SheetFlattenProcess::processSplitEdge()
 	int i = -1, j = -1;
 	int idexj = -1;
 	int baseIndex = -1, tarIndex = -1, maxBaseIndex = -1, maxTarIndex = -1;
+	TopoDS_Edge baseEdge, tarEdge;
+	SheetFlattenEdgeData* baseEdgeData = nullptr, * tarEdgeData = nullptr;
 	for (auto& baseGroup : m_EdgeData) {
 		++i;
 		for (auto& targetGroup : m_EdgeData) {
@@ -2379,20 +2601,20 @@ void SheetFlattenProcess::processSplitEdge()
 					if (baseFaces.size() >= 2 || targetFaces.size() >= 2) continue;
 
 					// 计算两边的夹角
-					double angle1 = 0.0;
-					CalculateAngleBetweenFaces(baseFaces[0], targetFaces[0], angle1);
+					double faceAngle = 0.0;
+					CalculateAngleBetweenFaces(baseFaces[0], targetFaces[0], faceAngle);
 
 					// 更新基础边和目标边的数据
-					base.setAngle(angle1);
+					base.setAngle(faceAngle);
 					base.setProcessWrapAngle(true);
 
 					target.setProcessWrapAngle(true);
 					target.setWrapAngle(true);
-					target.setAngle(angle1);
+					target.setAngle(faceAngle);
 
 					double distance = CalculateEdgeDistance(base.getOldEdge_2d(), target.getOldEdge_2d());
 
-					if (fabs(M_PI - angle1) > 1e-6)
+					if (fabs(M_PI - faceAngle) > 1e-6)
 					{
 						if (distance > maxDistance)
 						{
@@ -2401,6 +2623,10 @@ void SheetFlattenProcess::processSplitEdge()
 							maxDistance = distance;
 							maxBaseIndex = baseIndex;
 							maxTarIndex = tarIndex;
+							baseEdgeData = &base;
+							tarEdgeData = &target;
+							baseEdge = base.getOldEdge_2d();
+							tarEdge = target.getOldEdge_2d();
 						}
 					}
 				}
@@ -2430,7 +2656,7 @@ void SheetFlattenProcess::processSplitEdge()
 				}
 				check();
 
-
+				
 				if (isrotate)
 				{
 					maxDistance = -1;
@@ -2441,7 +2667,6 @@ void SheetFlattenProcess::processSplitEdge()
 						++baseIndex;
 						// 如果基础边已处理过，跳过
 						if (base.isProcessWrapAngle()) //continue;
-
 						for (auto& target : targetGroup) {
 							++tarIndex;
 							// 如果目标边已处理过或两边端点不同，跳过
@@ -2449,15 +2674,20 @@ void SheetFlattenProcess::processSplitEdge()
 								continue;
 							}
 
-
+							gp_Vec transaltion1;
 							double distance = CalculateEdgeDistance(base.getOldEdge_2d(), target.getOldEdge_2d());
-							if (distance > maxDistance)
+							if (distance > maxDistance && areEdgesNearlyParallel(base.getOldEdge_2d(), target.getOldEdge_2d(),10.)
+								&& calTranslate(target, target.getVector_face()[0], transaltion1))
 							{
 								idexj = j;
 								isAdj = true;
 								maxDistance = distance;
 								maxBaseIndex = baseIndex;
 								maxTarIndex = tarIndex;
+								baseEdgeData = &base;
+								tarEdgeData = &target;
+								baseEdge = base.getOldEdge_2d();
+								tarEdge = target.getOldEdge_2d();
 							}
 
 						}
@@ -2465,13 +2695,37 @@ void SheetFlattenProcess::processSplitEdge()
 					}
 					baseIndex = -1;
 				}
-
+				
+				gp_Trsf transaltion;
+				baseEdge = baseEdgeData->getOldEdge_2d();
+				tarEdge = tarEdgeData->getOldEdge_2d();
+				AlignEdges(baseEdge, tarEdge, transaltion);
+				for (auto& elem : targetGroup)
+				{
+					BRepBuilderAPI_Transform transformer(elem.getOldEdge_2d(), transaltion);
+					TopoDS_Edge transformedEdge = TopoDS::Edge(transformer.Shape());
+					changeMapIdex(elem.getOldEdge_2d(), transformedEdge);
+					elem.setOldEdge_2d(transformedEdge);
+				}
+				check();
 				calTranslate(targetGroup[maxTarIndex], targetGroup[maxTarIndex].getVector_face()[0], moveVec);
+				for (auto& elem : targetGroup)
+				{
+					gp_Vec translationVec = moveVec * 20.;
+					gp_Trsf aTranslation;
+					aTranslation.SetTranslation(translationVec);
+					BRepBuilderAPI_Transform transformer(elem.getOldEdge_2d(), aTranslation);
+					TopoDS_Edge transformedEdge = TopoDS::Edge(transformer.Shape());
+					changeMapIdex(elem.getOldEdge_2d(), transformedEdge);
+					elem.setOldEdge_2d(transformedEdge);
+				}
+				check();
 				//maxDistance = CalculateEdgeDistance(baseGroup[maxBaseIndex].getOldEdge_2d(), targetGroup[maxTarIndex].getOldEdge_2d());
 			}
 			maxTarIndex = -1;
 			maxBaseIndex = -1;
 			baseIndex = -1;
+			maxDistance = -1.;
 		}
 		if (isAdj == true)
 		{
@@ -2507,7 +2761,7 @@ void SheetFlattenProcess::processEdges_WrapAngle() {
 			if (!edge.isFinish()) 
 			{
 				moveEdge(baseGroup, edge);
-				check();
+				//check();
 			}
 		}
 	}
@@ -2521,8 +2775,8 @@ void SheetFlattenProcess::generate()
 	//processParallelEdge();
 	processSplitEdge();
 	check();
-	moveSplitEdge();
-	check();
+	//moveSplitEdge();
+	//check();
 
 	allReation2dEdge();
 	processSameFaceEdgeRelation();
@@ -2567,7 +2821,8 @@ void SheetFlattenProcess::generate()
 							if (it.getVector_newEdge_2d(aVectorEdges))
 							{
 								FinishEdges.insert(aBaseEdge);
-								//it.insertEdgeTo_new2d(aNewEdge);
+								FinishEdges.insert(aTarEdge);
+								it.setOverlapeOutlineEdge(aNewEdge);
 								m_outlindeEdges.emplace_back(aNewEdge);
 							}
 
@@ -2652,7 +2907,7 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 					aEdgadata->setOverLapEdge_Point(aBasePoint);
 					for (auto elem : tempedge)
 					{
-						TopoDS_Edge newedge = MoveEdge(elem, translation);
+						TopoDS_Edge newedge = translateEdge(elem, translation);
 						aEdges.emplace_back(newedge);
 					}
 					aEdgadata->setVector_newEdge_2d(aEdges);
@@ -2663,7 +2918,7 @@ void SheetFlattenProcess::generateNewEdge(const vector<TopoDS_Edge>& theMoveEdge
 			{
 				for (auto elem : tempedge)
 				{
-					TopoDS_Edge newedge = MoveEdge(elem, translation);
+					TopoDS_Edge newedge = translateEdge(elem, translation);
 					aEdges.emplace_back(newedge);
 				}
 				aEdgadata->setVector_newEdge_2d(aEdges);
@@ -2699,13 +2954,14 @@ void SheetFlattenProcess::generateMidleEdge(const vector<TopoDS_Edge>& theMoveEd
 			TopoDS_Edge newedge, aSoltEdge1, aSoltEdge2;
 			if (aEdgadata->isSoltEdge())
 			{
-				newedge = MoveEdge(tempedge, theTranslation_slot);
+				newedge = translateEdge(tempedge, theTranslation_slot);
 			}
 			else {
 				//newedge = TranslateEdge(tempedge, theTranslation);
-				newedge = MoveEdge(tempedge, theTranslation);
+				newedge = translateEdge(tempedge, theTranslation);
 			}
-			TopoDS_Edge midedge = midleLine(tempedge, newedge);
+			//TopoDS_Edge midedge = midleLine(tempedge, newedge);
+			TopoDS_Edge midedge = ComputeMiddleEdge(tempedge, newedge);
 			aEdges.emplace_back(midedge);
 			aEdges.emplace_back(newedge);
 			aEdges.emplace_back(tempedge);
@@ -2736,7 +2992,7 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 	vector<TopoDS_Edge> otherlines;
 	vector<TopoDS_Face> faces;
 	int rightNumber = 0, leftNumber = 0;
-	if (edge.getVector_face().size()>=2)
+	if (edge.isBendEdge())
 	{
 
 		edge.setFinish(true);
@@ -2746,10 +3002,7 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 
 		TopoDS_Edge baseEdge = edge.getOldEdge_2d();//旧二维
 		FindEdgesOnBothSides(edges, edge, leftEdges, rightEdges, colines, otherlines);//所有容器装的都是旧二维,朝里挪
-		/*if (angle > M_PI)
-		{
-			m_baseVec = -m_baseVec;
-		}*/
+		
 
 		for (auto& elem : leftEdges)
 		{
@@ -2770,6 +3023,46 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 				++rightNumber;
 			}
 		}
+
+		if (rightNumber <= leftNumber)
+		{
+			for (auto& it : colines)//遍历共线的线
+			{
+				SheetFlattenEdgeData* aEdgedata = nullptr;
+				quiryEdgeData(it, aEdgedata);
+				unordered_set<TopoDS_Edge> Edges = aEdgedata->getVector_sameFaceEdge_2d();
+				for (auto &item : rightEdges)
+				{
+					if (Edges.find(item) != Edges.end())
+					{
+						SheetFlattenEdgeData* aSameFaceEdgeData = nullptr;
+						quiryEdgeData(item, aSameFaceEdgeData);
+						aSameFaceEdgeData->setTranslateType(true);
+					}
+				}
+
+			}
+		}
+		else
+		{
+			for (auto& it : colines)//遍历共线的线
+			{
+				SheetFlattenEdgeData* aEdgedata = nullptr;
+				quiryEdgeData(it, aEdgedata);
+				unordered_set<TopoDS_Edge> Edges = aEdgedata->getVector_sameFaceEdge_2d();
+				for (auto& item : leftEdges)
+				{
+					if (Edges.find(item) != Edges.end())
+					{
+						SheetFlattenEdgeData* aSameFaceEdgeData = nullptr;
+						quiryEdgeData(item, aSameFaceEdgeData);
+						aSameFaceEdgeData->setTranslateType(true);
+					}
+				}
+
+			}
+		}
+
 
 		double moveDis = 2.;
 		calTranslate(moveDis, translation_slot, angle);
@@ -2804,19 +3097,8 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 	
 
 
-		for (auto &it : colines)//遍历共线的线
-		{
-			if (m_isNegativeBend)
-			{
-				//generateEdge(it);
-				//generateSoltEdge(it);
-			}
-			//generateOverlapEdge(it);
-			//generateEdge(it);
-		}
-
-
 	}
+	check();
 }
 //端点是否相同
 bool SheetFlattenProcess::AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2) {
@@ -2833,8 +3115,10 @@ bool SheetFlattenProcess::AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const 
 	gp_Pnt p2_2 = BRep_Tool::Pnt(v2_2);
 
 	// 判断两条边的端点是否相同（无论顺序）
-	bool sameStartEnd = p1_1.IsEqual(p2_1, Precision::Confusion()) && p1_2.IsEqual(p2_2, Precision::Confusion());
-	bool sameEndStart = p1_1.IsEqual(p2_2, Precision::Confusion()) && p1_2.IsEqual(p2_1, Precision::Confusion());
+	bool test = p1_1.IsEqual(p2_2, Precision::Confusion());
+	bool test1 = p1_2.IsEqual(p2_1, Precision::Confusion());
+	bool sameStartEnd = p1_1.IsEqual(p2_1, 1.e-4) && p1_2.IsEqual(p2_2, 1.e-4);
+	bool sameEndStart = p1_1.IsEqual(p2_2, 1.e-4) && p1_2.IsEqual(p2_1, 1.e-4);
 
 	return sameStartEnd || sameEndStart;
 }
