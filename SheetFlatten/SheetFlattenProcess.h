@@ -23,6 +23,9 @@
 #include<GeomAPI_IntCS.hxx>
 
 
+#include <Geom_Line.hxx>
+#include <Geom_Circle.hxx>
+#include <Geom_TrimmedCurve.hxx>
 
 #include <BRep_Tool.hxx>
 #include <Geom_Curve.hxx>
@@ -33,6 +36,7 @@
 
 
 #include "SheetFlattenEdgeData.h"
+#include"UniversalOtherSizeCalculate.h"
 
 #include <algorithm>
 #include <iostream>
@@ -107,6 +111,8 @@ private:
 	bool AreEdgesSameEndpoints(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2);
 	bool IsEdgesAtIntersection(TopoDS_Edge& edge1, TopoDS_Edge& edge2, gp_Pnt& intersection);
 	void calTranslateOriention(const TopoDS_Edge& theEdge, const gp_Pnt& thePoint, gp_Trsf& theTranslation, const double theDistance);
+	void ToInfo_DXF(const TopoDS_Edge& edge, point_t& startPoint, point_t& endPoint, point_t& center, Standard_Real& radius,
+		Standard_Real& startAngle, Standard_Real& endAngle, int& edgeType);
 public:
 	void check();
 	void generate();
@@ -126,6 +132,9 @@ public:
 	gp_Vec m_baseVec;//移动方向  放
 	bool m_isNegativeBend;
 	vector<TopoDS_Edge> m_outlindeEdges;
+	std::vector<std::tuple<point_t, point_t, std::string>> m_line;
+	std::vector<std::tuple<point_t, double, std::string>> m_circle;
+	std::vector< std::tuple< point_t, double, double, double, std::string > > m_eclipse;
 };
 
 SheetFlattenProcess::SheetFlattenProcess()
@@ -145,6 +154,93 @@ void SheetFlattenProcess::changeMapIdex(const TopoDS_Edge& oldEdge, const TopoDS
 	}
 }
 
+double BendingSizeCalculate(const double angle, const double SheetThickness)
+{
+	double Result = 0;
+	if (angle > 180) 
+	{
+		std::map<double, double> NegativeBendingChangerules = {
+			{0.5, 0}, {0.6, 0.3}, {0.8, 0.5}, {1, 0.8}, {1.2, 1}, {1.5, 1}, {2, 1.5},
+			{2.5, 2.0}, {3, 2.5}, {4, 3.0}, {5, 4.0}, {6, 5.0}, {8, 6.5}, {10, 8.0}, {12, 9.5}
+		};
+		double ThisCaseBendingSize_90 = 0;
+		auto it = NegativeBendingChangerules.find(SheetThickness);
+		if (it != NegativeBendingChangerules.end())
+		{
+			ThisCaseBendingSize_90 = it->second;
+		}
+		else
+		{
+			ThisCaseBendingSize_90 = 0;
+		}
+
+		double K1Temp = class_OtherSizeCalculate.PositiveK1(ThisCaseBendingSize_90, angle);
+		Result = class_OtherSizeCalculate.NnegativeK2(SheetThickness, angle, K1Temp);
+	}
+	else if (angle <= 180) 
+	{
+		
+		std::map<double, double> PositiveBendingChangerules = {
+			{0.5, 0}, {0.6, 0.3}, {0.8, 0.5}, {1, 0.8}, {1.2, 1}, {1.5, 1}, {2, 1.5},
+			{2.5, 2.0}, {3, 2.5}, {4, 3.0}, {5, 4.0}, {6, 5.0}, {8, 6.5}, {10, 8.0}, {12, 9.5}
+		};
+		double ThisCaseBendingSize_90 = 0;
+
+		auto it = PositiveBendingChangerules.find(SheetThickness);
+		if (it != PositiveBendingChangerules.end())
+		{
+			ThisCaseBendingSize_90 = it->second;
+		}
+		else
+		{
+			ThisCaseBendingSize_90 = 0;
+		}
+
+		Result = class_OtherSizeCalculate.PositiveK1(ThisCaseBendingSize_90, angle);
+	}
+
+	return Result;
+}
+
+
+double SolttingSizeCalculate(const double angle, const double sheetThinkness)
+{
+	double Result = 0;
+	if (angle > 180) 
+	{
+		Result = 0;
+	}
+	else if (angle <= 180) 
+	{
+	
+		if (sheetThinkness < 1.2)
+		{
+	
+			std::map<double, double> PositiveBendingChangerules = {
+				{0.5, 0}, {0.6, 0.3}, {0.8, 0.5}, {1, 0.8}, {1.2, 1}, {1.5, 1}, {2, 1.5},
+				{2.5, 2.0}, {3, 2.5}, {4, 3.0}, {5, 4.0}, {6, 5.0}, {8, 6.5}, {10, 8.0}, {12, 9.5}
+			};
+			double ThisCaseBendingSize_90 = 0;
+
+			auto it = PositiveBendingChangerules.find(sheetThinkness);
+			if (it != PositiveBendingChangerules.end())
+			{
+				ThisCaseBendingSize_90 = it->second;
+			}
+			else
+			{
+				ThisCaseBendingSize_90 = 0;
+			}
+
+			Result = std::abs(std::round(ThisCaseBendingSize_90 * (1 / std::tan(angle / 2 * M_PI / 180)) * 10) / 10);
+		}
+		else
+		{
+			Result = std::abs(std::round(1 * (1 / std::tan(angle / 2 * M_PI / 180)) * 10) / 10);
+		}
+	}
+	return Result;
+}
 // 判断两条线段是否近乎平行
 bool areEdgesNearlyParallel(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, double angleThresholdDegrees) {
 	// 提取边的端点
@@ -299,10 +395,11 @@ TopoDS_Edge ComputeMiddleEdge(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2
 
 
 // 提取圆弧的关键信息
-bool ExtractArcInfo(const TopoDS_Edge& edge, gp_Pnt& center, Standard_Real& radius,
-	Standard_Real& startAngle, Standard_Real& endAngle) {
+bool ExtractEdgeInfo(const TopoDS_Edge& edge, point_t&startPoint, point_t&endPoint, point_t& centerPoint, Standard_Real& radius,
+	Standard_Real& startAngle, Standard_Real& endAngle,int &edgeType) {
 	// 提取几何曲线
 	Standard_Real first, last;
+	gp_Pnt start, end, center;
 	Handle(Geom_Curve) curve = BRep_Tool::Curve(edge, first, last);
 
 	if (curve.IsNull()) {
@@ -310,47 +407,90 @@ bool ExtractArcInfo(const TopoDS_Edge& edge, gp_Pnt& center, Standard_Real& radi
 		return false;
 	}
 
-	// 检查是否是圆弧
-	Handle(Geom_TrimmedCurve) trimmedCurve = Handle(Geom_TrimmedCurve)::DownCast(curve);
-	Handle(Geom_Circle) circle;
+	// 检查几何曲线的类型
+	if (curve->IsKind(STANDARD_TYPE(Geom_Line))) {
+		edgeType = 0;
+		TopoDS_Vertex v1 = TopExp::FirstVertex(edge);
+		TopoDS_Vertex v2 = TopExp::LastVertex(edge);
+		start = BRep_Tool::Pnt(v1);
+		point_t tempStart(start.X(), start.Y());
+		startPoint = tempStart;
+		end = BRep_Tool::Pnt(v2);
+		point_t tempend(end.X(), end.Y());
+		endPoint = tempend;
 
-	if (!trimmedCurve.IsNull()) {
-		circle = Handle(Geom_Circle)::DownCast(trimmedCurve->BasisCurve());
+	}
+	else if (curve->IsKind(STANDARD_TYPE(Geom_Circle))) {
+		edgeType = 1;
+		// 检查是否是圆弧
+		Handle(Geom_TrimmedCurve) trimmedCurve = Handle(Geom_TrimmedCurve)::DownCast(curve);
+		Handle(Geom_Circle) circle;
+
+
+		if (!trimmedCurve.IsNull()) {
+			circle = Handle(Geom_Circle)::DownCast(trimmedCurve->BasisCurve());
+		}
+		else {
+			circle = Handle(Geom_Circle)::DownCast(curve);
+		}
+
+		if (circle.IsNull()) {
+			std::cerr << "The edge is not a circular arc." << std::endl;
+			return false;
+		}
+
+		// 获取圆的信息
+		gp_Circ circ = circle->Circ();
+		center = circ.Location();  // 圆心
+		point_t tempCenter(center.X(), center.Y());
+		centerPoint = tempCenter;
+		radius = circ.Radius();            // 半径
+
+		// 计算起始和终止角度（基于参数范围）
+		gp_Dir xDir = circ.XAxis().Direction(); // 圆的X方向
+		gp_Dir yDir = circ.YAxis().Direction(); // 圆的Y方向
+
+		gp_Pnt startPoint, endPoint;
+		trimmedCurve->D0(first, startPoint);
+		trimmedCurve->D0(last, endPoint);
+
+		gp_Vec startVec(center, startPoint);
+		gp_Vec endVec(center, endPoint);
+
+		startAngle = atan2(startVec.Dot(yDir), startVec.Dot(xDir)); // 起始角度
+		endAngle = atan2(endVec.Dot(yDir), endVec.Dot(xDir));       // 终止角度
+
+		// 将角度归一化到 [0, 2π]
+		if (startAngle < 0) startAngle += 2 * M_PI;
+		if (endAngle < 0) endAngle += 2 * M_PI;
+
+	}
+	else if (curve->IsKind(STANDARD_TYPE(Geom_BSplineCurve))) {
+		return false;
+	}
+	else if (curve->IsKind(STANDARD_TYPE(Geom_TrimmedCurve))) {
+		return false;
 	}
 	else {
-		circle = Handle(Geom_Circle)::DownCast(curve);
-	}
-
-	if (circle.IsNull()) {
-		std::cerr << "The edge is not a circular arc." << std::endl;
 		return false;
 	}
 
-	// 获取圆的信息
-	gp_Circ circ = circle->Circ();
-	center = circ.Location();          // 圆心
-	radius = circ.Radius();            // 半径
 
-	// 计算起始和终止角度（基于参数范围）
-	gp_Dir xDir = circ.XAxis().Direction(); // 圆的X方向
-	gp_Dir yDir = circ.YAxis().Direction(); // 圆的Y方向
-
-	gp_Pnt startPoint, endPoint;
-	trimmedCurve->D0(first, startPoint);
-	trimmedCurve->D0(last, endPoint);
-
-	gp_Vec startVec(center, startPoint);
-	gp_Vec endVec(center, endPoint);
-
-	startAngle = atan2(startVec.Dot(yDir), startVec.Dot(xDir)); // 起始角度
-	endAngle = atan2(endVec.Dot(yDir), endVec.Dot(xDir));       // 终止角度
-
-	// 将角度归一化到 [0, 2π]
-	if (startAngle < 0) startAngle += 2 * M_PI;
-	if (endAngle < 0) endAngle += 2 * M_PI;
 
 	return true;
 }
+
+
+bool ExtractLineInfo(const TopoDS_Edge& edge, gp_Pnt& startPoint, gp_Pnt& endPoint) 
+{
+	TopoDS_Vertex v1 = TopExp::FirstVertex(edge);
+	TopoDS_Vertex v2 = TopExp::LastVertex(edge);
+	startPoint = BRep_Tool::Pnt(v1);
+	endPoint = BRep_Tool::Pnt(v2);
+
+	return true;
+}
+
 
 
 TopoDS_Edge SheetFlattenProcess::translateEdge(const TopoDS_Edge& edge, const gp_Trsf& translation) {
@@ -1244,7 +1384,8 @@ gp_Vec SheetFlattenProcess::CalMoveVector(const gp_Pnt& p1, const gp_Pnt& p2, co
 void SheetFlattenProcess::FindEdgesOnBothSides(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& baseEdge,
 	std::vector<TopoDS_Edge>& leftEdges, std::vector<TopoDS_Edge>& rightEdges, std::vector<TopoDS_Edge>& colines, std::vector<TopoDS_Edge>& otherlines) {
 	// 获取基准边的起点和终点
-	TopoDS_Edge aBaseEdge = baseEdge.getOldEdge_2d();
+	//TopoDS_Edge aBaseEdge = baseEdge.getOldEdge_2d();
+	TopoDS_Edge aBaseEdge = baseEdge.getNewEdge_2d();
 	//baseEdge.getVector_newEdge_2d(aBaseEdge);
 	TopoDS_Vertex v1 = TopExp::FirstVertex(aBaseEdge);  // 获取起点
 	TopoDS_Vertex v2 = TopExp::LastVertex(aBaseEdge);   // 获取终点
@@ -1254,7 +1395,9 @@ void SheetFlattenProcess::FindEdgesOnBothSides(vector<SheetFlattenEdgeData>& edg
 
 	// 遍历模型中的所有边
 	for (auto &item : edges) {
-		TopoDS_Edge currentEdge = item.getOldEdge_2d();//旧二维
+		//TopoDS_Edge currentEdge = item.getOldEdge_2d();//旧二维
+
+		TopoDS_Edge currentEdge = item.getNewEdge_2d();//旧二维
 		//item.getNewEdge_2d(currentEdge);
 		TopoDS_Vertex w1 = TopExp::FirstVertex(currentEdge);  // 获取起点
 		TopoDS_Vertex w2 = TopExp::LastVertex(currentEdge);
@@ -1462,28 +1605,58 @@ TopoDS_Edge SheetFlattenProcess::calRetractTranslate(SheetFlattenEdgeData & theE
 		{
 			SheetFlattenEdgeData* pEdgedata;
 			quiryEdgeData(elem, pEdgedata);
-			vector<TopoDS_Edge> aEdges;
+			vector<TopoDS_Edge> aBaseEdges,aTarEdges;
 			//if (pEdgedata->getVector_newEdge_2d(aEdges))
 			{
-				pEdgedata->getVector_newEdge_2d(aEdges);
+				if (!pEdgedata->getVector_newEdge_2d(aBaseEdges))
+				{
+					pEdgedata->setVector_newEdge_2d(aBaseEdges);
+				}
+				if (!theEdge.getVector_newEdge_2d(aTarEdges))
+				{
+					theEdge.setVector_newEdge_2d(aTarEdges);
+				}
+				//pEdgedata->getVector_WrapAngleEdges(aBaseEdges);
 				if (pEdgedata->isBendEdge())
 				{
 					continue;
 				}
 				//if (!isReduct)
 				{
-					a2dInterEdge = aEdges.back();
+					a2dInterEdge = aBaseEdges.back();
 					//TrimEdgesAtIntersection1(newEdge, a2dInterEdge, intersection);
 					FindIntersectionAndExtend(newEdge, a2dInterEdge, intersection);
-					//m_oldMapNewEdge[elem][aEdges.size()-1] = a2dInterEdge;
-					pEdgedata->insertEdgeTo_new2d(a2dInterEdge);
+
+					if (pEdgedata->isAddWrapAngleEdge())
+					{
+						aBaseEdges[aBaseEdges.size() - 1] = a2dInterEdge;
+						pEdgedata->setVector_newEdge_2d(aBaseEdges);
+					}
+					else
+					{
+						pEdgedata->insertEdgeTo_new2d(a2dInterEdge);
+						pEdgedata->setAddWrapAngleEdge(true);
+					}
+					//aBaseEdges[aBaseEdges.size() - 1] = a2dInterEdge;
+					//pEdgedata->setVector_WrapAngleEdges(aBaseEdges);
+					if (theEdge.isAddWrapAngleEdge())
+					{
+						aTarEdges[aTarEdges.size() - 1] = newEdge;
+						theEdge.setVector_newEdge_2d(aTarEdges);
+					}
+					else
+					{
+						theEdge.insertEdgeTo_new2d(newEdge);
+						theEdge.setAddWrapAngleEdge(true);
+					}
+
+
+
 				}
-				//TrimEdgesAtIntersection1(newEdge, a2dInterEdge, intersection);
-				//m_oldMapNewEdge[elem][0] = a2dInterEdge;
 			}
 		}
 	}
-	theEdge.insertEdgeTo_new2d(newEdge);
+	//theEdge.insertEdgeTo_new2d(newEdge);
 	return newEdge;  // 返回新的边
 
 
@@ -2243,6 +2416,19 @@ void SheetFlattenProcess::processOutline()
 	}
 }
 
+void SheetFlattenProcess::ToInfo_DXF(const TopoDS_Edge& edge, point_t& startPoint, point_t& endPoint, point_t& center, Standard_Real& radius,
+	Standard_Real& startAngle, Standard_Real& endAngle, int& edgeType)
+{
+	ExtractEdgeInfo(edge, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
+	if (edgeType == LineCurve)
+	{
+		m_line.emplace_back(startPoint, endPoint, "0");
+	}
+	else if (edgeType == CircleCurve)
+	{
+		m_eclipse.emplace_back(center, radius, startAngle, endAngle, "0");
+	}
+}
 
 void SheetFlattenProcess::check()
 {
@@ -2250,17 +2436,25 @@ void SheetFlattenProcess::check()
 	BRep_Builder aBuilder;
 	aBuilder.MakeCompound(aCompound);
 	BRepBuilderAPI_MakeWire wireBuilder;
+	point_t startPoint, endPoint, center;
+	Standard_Real radius, startAngle, endAngle;
+	int edgeType = -1;
+	m_line.clear();
+	m_circle.clear();
+	m_eclipse.clear();
 	for (auto elem : m_EdgeData)
 	{
 		for (auto item : elem)
 		{
 			TopoDS_Edge edge;
 			vector<TopoDS_Edge> aEdges;
+			CurveType type = item.GetCurveType();
 			if (item.getOverlapeOutlineEdge(edge))
 			{
 				if (edge.IsNull()) {
 					std::cerr << "Invalid edge detected!" << std::endl;
 				}
+				ToInfo_DXF(edge, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
 				aBuilder.Add(aCompound, edge);
 				//wireBuilder.Add(edge);
 			}
@@ -2270,6 +2464,7 @@ void SheetFlattenProcess::check()
 				if (edge.IsNull()) {
 					std::cerr << "Invalid edge detected!" << std::endl;
 				}
+				ToInfo_DXF(edge, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
 				aBuilder.Add(aCompound, edge);
 				//wireBuilder.Add(edge);
 			}
@@ -2277,6 +2472,7 @@ void SheetFlattenProcess::check()
 			{
 				for (auto it : aEdges)
 				{
+					ToInfo_DXF(it, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
 					aBuilder.Add(aCompound, it);
 					//wireBuilder.Add(it);
 				
@@ -2286,6 +2482,7 @@ void SheetFlattenProcess::check()
 			{
 				for (auto it : aEdges)
 				{
+					ToInfo_DXF(it, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
 					aBuilder.Add(aCompound, it);
 					//wireBuilder.Add(it);
 
@@ -2563,30 +2760,21 @@ bool AlignEdges(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp_Trsf &trs
 void SheetFlattenProcess::processSplitEdge()
 {
 	double maxDistance = -1;
-	int MaxparallelNumber = -1;
 	gp_Dir standard(0, 0, 1);
 	gp_Vec moveVec,baseVec,tarVec;
-	bool isAdj = false;
-	int i = -1, j = -1;
-	int idexj = -1;
-	int baseIndex = -1, tarIndex = -1, maxBaseIndex = -1, maxTarIndex = -1;
 	TopoDS_Edge baseEdge, tarEdge;
 	SheetFlattenEdgeData* baseEdgeData = nullptr, * tarEdgeData = nullptr;
 	for (auto& baseGroup : m_EdgeData) {
-		++i;
 		for (auto& targetGroup : m_EdgeData) {
-			++j;
 			// 如果是同一个分组，跳过
 			if (&baseGroup == &targetGroup) continue;
 
 			// 遍历基础边
 			for (auto& base : baseGroup) {
-				++baseIndex;
 				// 如果基础边已处理过，跳过
 				if (base.isProcessWrapAngle()) continue;
 
 				for (auto& target : targetGroup) {
-					++tarIndex;
 					// 如果目标边已处理过或两边端点不同，跳过
 					if (target.isProcessWrapAngle() ||
 						!AreEdgesSameEndpoints(base.getEdge_3d(), target.getEdge_3d())) {
@@ -2618,11 +2806,7 @@ void SheetFlattenProcess::processSplitEdge()
 					{
 						if (distance > maxDistance)
 						{
-							idexj = j;
-							isAdj = true;
 							maxDistance = distance;
-							maxBaseIndex = baseIndex;
-							maxTarIndex = tarIndex;
 							baseEdgeData = &base;
 							tarEdgeData = &target;
 							baseEdge = base.getOldEdge_2d();
@@ -2631,13 +2815,13 @@ void SheetFlattenProcess::processSplitEdge()
 					}
 				}
 				
-				tarIndex = -1;
 			}
-			if (maxTarIndex != -1)
+			if (maxDistance != -1)
 			{
-
-				calTranslate(baseGroup[maxBaseIndex], baseGroup[maxBaseIndex].getVector_face()[0], baseVec);
-				calTranslate(targetGroup[maxTarIndex], targetGroup[maxTarIndex].getVector_face()[0], tarVec);
+				calTranslate(*baseEdgeData, baseEdgeData->getVector_face()[0], baseVec);
+				calTranslate(*tarEdgeData, tarEdgeData->getVector_face()[0], tarVec);
+				//calTranslate(baseGroup[maxBaseIndex], baseGroup[maxBaseIndex].getVector_face()[0], baseVec);
+				//calTranslate(targetGroup[maxTarIndex], targetGroup[maxTarIndex].getVector_face()[0], tarVec);
 				double angle = CalculateClockwiseAngle(baseVec, tarVec, standard);
 
 				double teset = fabs(angle - M_PI);
@@ -2660,15 +2844,10 @@ void SheetFlattenProcess::processSplitEdge()
 				if (isrotate)
 				{
 					maxDistance = -1;
-					MaxparallelNumber = -1;
-					tarIndex = -1;
-					baseIndex = -1;
 					for (auto& base : baseGroup) {
-						++baseIndex;
 						// 如果基础边已处理过，跳过
 						if (base.isProcessWrapAngle()) //continue;
 						for (auto& target : targetGroup) {
-							++tarIndex;
 							// 如果目标边已处理过或两边端点不同，跳过
 							if (!AreEdgesSameEndpoints(base.getEdge_3d(), target.getEdge_3d())) {
 								continue;
@@ -2679,11 +2858,7 @@ void SheetFlattenProcess::processSplitEdge()
 							if (distance > maxDistance && areEdgesNearlyParallel(base.getOldEdge_2d(), target.getOldEdge_2d(),10.)
 								&& calTranslate(target, target.getVector_face()[0], transaltion1))
 							{
-								idexj = j;
-								isAdj = true;
 								maxDistance = distance;
-								maxBaseIndex = baseIndex;
-								maxTarIndex = tarIndex;
 								baseEdgeData = &base;
 								tarEdgeData = &target;
 								baseEdge = base.getOldEdge_2d();
@@ -2691,9 +2866,7 @@ void SheetFlattenProcess::processSplitEdge()
 							}
 
 						}
-						tarIndex = -1;
 					}
-					baseIndex = -1;
 				}
 				
 				gp_Trsf transaltion;
@@ -2708,7 +2881,7 @@ void SheetFlattenProcess::processSplitEdge()
 					elem.setOldEdge_2d(transformedEdge);
 				}
 				check();
-				calTranslate(targetGroup[maxTarIndex], targetGroup[maxTarIndex].getVector_face()[0], moveVec);
+				calTranslate(*tarEdgeData, tarEdgeData->getVector_face()[0], moveVec);
 				for (auto& elem : targetGroup)
 				{
 					gp_Vec translationVec = moveVec * 20.;
@@ -2722,28 +2895,8 @@ void SheetFlattenProcess::processSplitEdge()
 				check();
 				//maxDistance = CalculateEdgeDistance(baseGroup[maxBaseIndex].getOldEdge_2d(), targetGroup[maxTarIndex].getOldEdge_2d());
 			}
-			maxTarIndex = -1;
-			maxBaseIndex = -1;
-			baseIndex = -1;
 			maxDistance = -1.;
 		}
-		if (isAdj == true)
-		{
-			//if (m_adjGroupIndex.find(i) == m_adjGroupIndex.end())
-			{
-				moveData data;
-				data.adjEdgeDataIndex = idexj;
-				data.distance = maxDistance;
-				data.moveVec = moveVec;
-				m_adjGroupIndex[i].emplace_back(data);
-			}
-
-		}
-		isAdj = false;
-		idexj = -1;
-		j = -1;
-		maxDistance = -1.;
-		MaxparallelNumber = -1;
 	}
 }
 
@@ -2777,12 +2930,11 @@ void SheetFlattenProcess::generate()
 	check();
 	//moveSplitEdge();
 	//check();
-
 	allReation2dEdge();
 	processSameFaceEdgeRelation();
 	processOverlap();
 	allReation2dNewEdge();
-
+	check();
 
 	processEdges_WrapAngle();
 	check();
@@ -2837,6 +2989,8 @@ void SheetFlattenProcess::generate()
 
 	processOutline();
 	check();
+	SaveDxfFile saveFile;
+	saveFile.SaveDxf(m_line, m_circle, m_eclipse, "D:\\1_work\\test.dxf");
 }
 
 bool AreVectorsNearlyParallel(const gp_Vec& vec1, const gp_Vec& vec2, double angleThresholdDegrees) {

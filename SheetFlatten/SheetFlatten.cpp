@@ -14,7 +14,7 @@ int main()
 	core->setSplitListId(sliceListId);
 	core->setSoltListId(SoltListId);
 
-	if (core->Read("D:\\1_work\\test2.stp"))
+	if (core->Read("D:\\1_work\\1233333.STEP"))
 	{
 		core->Perform();
 		delete core;

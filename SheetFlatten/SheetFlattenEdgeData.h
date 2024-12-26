@@ -100,9 +100,12 @@ public:
     bool getVector_LapelEdges(vector<TopoDS_Edge>& edges) { if (m_LapelEdges_2d.size() < 1)return false; edges = m_LapelEdges_2d; return true; }
     void setVector_LapelEdges(const vector<TopoDS_Edge>& edges) { m_LapelEdges_2d = edges; }
 
-    // Getter and Setter for bMidleEdge
-    bool isMidleEdge() const { return m_bMidleEdge; }
-    void setMidleEdge(bool midleEdge) { m_bMidleEdge = midleEdge; }
+
+    void getVector_WrapAngleEdges(vector<TopoDS_Edge>& edges) {
+        if (m_bAddWrapAngleEdge)getVector_newEdge_2d(edges); else {
+            edges = m_vector_wrapAngle;
+    } }
+    void setVector_WrapAngleEdges(const vector<TopoDS_Edge>& edges) { m_vector_wrapAngle = edges; return; }
 
     bool isNegativeBend() const { return m_bNegativeBend; }
     void setNegativeBend(bool midleEdge) { m_bNegativeBend = midleEdge; }
@@ -138,8 +141,8 @@ public:
     pair<int, int> getSplitIndex()const {return m_SplitIndex;}
     void setSplitIndex(pair<int, int> Index) { m_SplitIndex = Index; }
 
-    bool isFinishWrapAngle() { return m_bFinishWrapAngle; }
-    void setFinishWrapAngle(bool WrapAngle) { m_bFinishWrapAngle = WrapAngle; }
+    bool isAddWrapAngleEdge() { return m_bAddWrapAngleEdge; }
+    void setAddWrapAngleEdge(bool WrapAngle) { m_bAddWrapAngleEdge = WrapAngle; }
 
     bool isWrapAngle() { return m_bWrapAngle; }
     void setWrapAngle(bool WrapAngle) { m_bWrapAngle = WrapAngle; }
@@ -200,7 +203,6 @@ public:
         m_vector_interseEdge_new2d.clear();
         m_angle = 0.;
         m_bBendEdge = false;
-        m_bMidleEdge = false;
         m_bOverlapeEdge = false;
         m_bSplitEdge = false;
         m_bSoltEdge = false;
@@ -221,20 +223,20 @@ private:
 	vector<TopoDS_Edge> m_vector_sameFaceEdge_uninterseEdge_2d;//共面但不相交
     unordered_set<TopoDS_Edge> m_vector_sameFaceEdge_2d;//共面的任意线
 	vector<TopoDS_Edge> m_vector_interseEdge_new2d;//共面且相交判断条件在新二维的基础上
-	bool m_bMidleEdge;
-	bool m_bOverlapeEdge;
+    vector<TopoDS_Edge> m_vector_wrapAngle;
+	bool m_bOverlapeEdge = false;
     bool m_bFirstMoveOverlapeEdge = false;
     CurveType m_curveType;
-    bool m_bWrapAngle;
-    bool m_bBendEdge;
-	bool m_bSoltEdge;
-	bool m_bSplitEdge;
-    bool m_bFinish;
-    bool m_bFinishWrapAngle;
-	double m_angle;
-    bool m_bNegativeBend;
-    bool m_bOutline;
-    bool m_bProcessWrapAngle;
+    bool m_bWrapAngle = false;
+    bool m_bBendEdge = false;
+	bool m_bSoltEdge = false;
+	bool m_bSplitEdge = false;
+    bool m_bFinish = false;
+    bool m_bAddWrapAngleEdge = false;
+	double m_angle = false;
+    bool m_bNegativeBend = false;
+    bool m_bOutline = false;
+    bool m_bProcessWrapAngle = false;
     int m_parallelNumber = 0;
     pair<int, int> m_SplitIndex;
 	TopoDS_Edge m_OutlineEdge;
@@ -243,8 +245,8 @@ private:
     bool m_bTranslateType = false;
 public:
     SheetFlattenEdgeData()
-		:m_bMidleEdge(false), m_bOverlapeEdge(false), m_bSoltEdge(false), m_angle(0.), m_bFinish(false), m_bBendEdge(false), m_bSplitEdge(false)
-        , m_bNegativeBend(false), m_bFinishWrapAngle(false), m_bWrapAngle(false)
+		:m_bOverlapeEdge(false), m_bSoltEdge(false), m_angle(0.), m_bFinish(false), m_bBendEdge(false), m_bSplitEdge(false)
+        , m_bNegativeBend(false), m_bAddWrapAngleEdge(false), m_bWrapAngle(false)
 	{
 	}
 };

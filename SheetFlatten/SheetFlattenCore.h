@@ -68,9 +68,12 @@ public:
 	}
 public:
 	bool Read(const string& filePath);
+	void setdoc(const Handle(TDocStd_Document)&document);
 	int Perform();
 
 	double GetFacesAngle(const TopoDS_Edge& edge);
+	void setSoltEdges(const set<TopoDS_Edge>& edges);
+	void setSplitEdges(const set<TopoDS_Edge>& edges);
 	void setSoltListId(const vector<Standard_Integer>& data);
 	void setSplitListId(const vector<Standard_Integer>& data);
 
@@ -118,8 +121,8 @@ private:
 private:
 	vector<Standard_Integer> m_SoltListId;
 	vector<Standard_Integer> m_SplitListId;
-	set<TopoDS_Edge> m_mapSplitEdges;
-	set<TopoDS_Edge> m_mapSoltEdges;
+	set<TopoDS_Edge> m_setSplitEdges;
+	set<TopoDS_Edge> m_setSoltEdges;
 	map<TopoDS_Edge, set<TopoDS_Face> > mapEdgeAdjFaces;
 	map<TopoDS_Edge, double> mapFacesAngle;
 	set<TopoDS_Face> finishedFaces;
@@ -156,6 +159,21 @@ inline bool SheetFlattenCore::Read(const string& filePath)
 	}
 }
 
+void SheetFlattenCore::setdoc(const Handle(TDocStd_Document)& document)
+{
+	doc = document;
+}
+
+void SheetFlattenCore::setSoltEdges(const set<TopoDS_Edge>& edges)
+{
+	m_setSoltEdges = edges;
+}
+
+void SheetFlattenCore::setSplitEdges(const set<TopoDS_Edge>& edges)
+{
+	m_setSplitEdges = edges;
+}
+
 inline int SheetFlattenCore::Perform()
 {
 	Handle(XCAFDoc_ShapeTool)ST = XCAFDoc_DocumentTool::ShapeTool(doc->Main());
@@ -174,19 +192,6 @@ inline int SheetFlattenCore::Perform()
 		BRepMesh_IncrementalMesh(objShape, aMeshParams);
 
 		BuildEdgeAdjFacesMap(objShape);
-		for (int i = 1; i <= faceMap.Extent(); ++i)
-		{
-			TopoDS_Edge edge = TopoDS::Edge(faceMap(i));
-			Standard_Integer id = faceMap.FindIndex(faceMap(i));
-			if (find(m_SoltListId.begin(), m_SoltListId.end(), id) != m_SoltListId.end())
-			{
-				m_mapSoltEdges.insert(edge);
-			}
-			if (find(m_SplitListId.begin(), m_SplitListId.end(), id) != m_SplitListId.end())
-			{
-				m_mapSplitEdges.insert(edge);
-			}
-		}
 		BuildFacesAngleMap();
 
 		if (!BuildFlattenTree(objShape))
@@ -388,11 +393,11 @@ void SheetFlattenCore::process()
 					m_EdgeData.setNegativeBend(true);
 				}
 			}
-			if (m_mapSoltEdges.find(elem.first) != m_mapSoltEdges.end())
+			if (m_setSoltEdges.find(elem.first) != m_setSoltEdges.end())
 			{
 				m_EdgeData.setSoltEdge(true);
 			}
-			if (m_mapSplitEdges.find(elem.first) != m_mapSplitEdges.end())
+			if (m_setSplitEdges.find(elem.first) != m_setSplitEdges.end())
 			{
 				m_EdgeData.setSplitEdge(true);
 			}
@@ -627,6 +632,10 @@ inline void SheetFlattenCore::BuildFlattenTreeNode(tree<FlattenFaceNode>::iterat
 
 		for (set<TopoDS_Face>::iterator faceIt = mapEdgeAdjFaces[objEdge].begin(); faceIt != mapEdgeAdjFaces[objEdge].end(); faceIt++)
 		{
+			if (m_setSplitEdges.find(objEdge) != m_setSplitEdges.end())
+			{
+				continue;
+			}
 			// 如果边只有一个相邻面则不是公共边
 			if (mapEdgeAdjFaces[objEdge].size() == 1)
 			{

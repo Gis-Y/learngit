@@ -1092,7 +1092,6 @@ public:
 		BRep_Builder aBuilder;
 		for (auto item : edges)	// MAP<TopoDS_Edge, TColStd_Array1OfInteger>edges			
 		{		
-			set<TopoDS_Edge> setEdges;
 			Handle(TColgp_HArray1OfPnt2d) aPoints = new TColgp_HArray1OfPnt2d(1, item.second.Size());
 
 			for (int i = 1; i <= item.second.Size(); i++)
