@@ -5,8 +5,8 @@
 #include <BRepAdaptor_Surface.hxx>
 #include <Geom_BSplineSurface.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
-#include <GeomConvert_SurfToAnaSurf.hxx>
-#include <GeomConvert_CurveToAnaCurve.hxx>
+//#include <GeomConvert_SurfToAnaSurf.hxx>
+//#include <GeomConvert_CurveToAnaCurve.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom_CylindricalSurface.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -41,11 +41,7 @@
 using namespace std;
 using namespace tcl;
 
-//typedef struct interseLine_Line
-//{
-//	vector<TopoDS_Edge> interseLine;
-//	vector<TopoDS_Edge> Line;
-//};
+
 class SheetFlattenCore
 {
 public:

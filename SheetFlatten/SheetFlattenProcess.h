@@ -73,6 +73,7 @@ private:
 	void FindEdgesOnBothSides(vector<SheetFlattenEdgeData>& edges, SheetFlattenEdgeData& baseEdge,
 		std::vector<TopoDS_Edge>& leftEdges, std::vector<TopoDS_Edge>& rightEdges, std::vector<TopoDS_Edge>& colines, std::vector<TopoDS_Edge>& otherlines);
 	void calTranslate(const double distance, gp_Trsf& translation, const double& angle);//无用可以注释
+	void calSoltTranslate(const double distance, gp_Trsf& translation, const double& angle);
 	TopoDS_Edge calRetractTranslate(SheetFlattenEdgeData &theEdge, const TopoDS_Face& theFace, const double theDistance, double theAngle);
 	bool CalculateAngleBetweenFaces(const vector<TopoDS_Face>& face, double& angle);
 	bool CalculateAngleBetweenFaces(const TopoDS_Face& theBaseFace, const TopoDS_Face& theTarFace, double& angle);
@@ -112,7 +113,7 @@ private:
 	bool IsEdgesAtIntersection(TopoDS_Edge& edge1, TopoDS_Edge& edge2, gp_Pnt& intersection);
 	void calTranslateOriention(const TopoDS_Edge& theEdge, const gp_Pnt& thePoint, gp_Trsf& theTranslation, const double theDistance);
 	void ToInfo_DXF(const TopoDS_Edge& edge, point_t& startPoint, point_t& endPoint, point_t& center, Standard_Real& radius,
-		Standard_Real& startAngle, Standard_Real& endAngle, int& edgeType);
+		Standard_Real& startAngle, Standard_Real& endAngle, const int& edgeType);
 public:
 	void check();
 	void generate();
@@ -199,7 +200,7 @@ double BendingSizeCalculate(const double angle, const double SheetThickness)
 		Result = class_OtherSizeCalculate.PositiveK1(ThisCaseBendingSize_90, angle);
 	}
 
-	return Result;
+	return std::abs( Result);
 }
 
 
@@ -306,7 +307,7 @@ bool FindIntersectionAndExtend(TopoDS_Edge& edge1,TopoDS_Edge& edge2,gp_Pnt& int
 			if (distance < Precision::Confusion()) {
 				gp_Pnt interPoint1, interPoint2;
 				extrema.Points(i, interPoint1, interPoint2);
-
+	
 				// 记录交点
 				intersectionPoint = interPoint1;
 				Standard_Real param1, param2;
@@ -396,7 +397,7 @@ TopoDS_Edge ComputeMiddleEdge(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2
 
 // 提取圆弧的关键信息
 bool ExtractEdgeInfo(const TopoDS_Edge& edge, point_t&startPoint, point_t&endPoint, point_t& centerPoint, Standard_Real& radius,
-	Standard_Real& startAngle, Standard_Real& endAngle,int &edgeType) {
+	Standard_Real& startAngle, Standard_Real& endAngle,const int &edgeType) {
 	// 提取几何曲线
 	Standard_Real first, last;
 	gp_Pnt start, end, center;
@@ -408,8 +409,8 @@ bool ExtractEdgeInfo(const TopoDS_Edge& edge, point_t&startPoint, point_t&endPoi
 	}
 
 	// 检查几何曲线的类型
-	if (curve->IsKind(STANDARD_TYPE(Geom_Line))) {
-		edgeType = 0;
+	if (curve->IsKind(STANDARD_TYPE(Geom_Line)) || edgeType == LineCurve) {
+		//edgeType = 0;
 		TopoDS_Vertex v1 = TopExp::FirstVertex(edge);
 		TopoDS_Vertex v2 = TopExp::LastVertex(edge);
 		start = BRep_Tool::Pnt(v1);
@@ -420,8 +421,8 @@ bool ExtractEdgeInfo(const TopoDS_Edge& edge, point_t&startPoint, point_t&endPoi
 		endPoint = tempend;
 
 	}
-	else if (curve->IsKind(STANDARD_TYPE(Geom_Circle))) {
-		edgeType = 1;
+	else if (curve->IsKind(STANDARD_TYPE(Geom_Circle)) || edgeType == CircleCurve) {
+		//edgeType = 1;
 		// 检查是否是圆弧
 		Handle(Geom_TrimmedCurve) trimmedCurve = Handle(Geom_TrimmedCurve)::DownCast(curve);
 		Handle(Geom_Circle) circle;
@@ -451,8 +452,16 @@ bool ExtractEdgeInfo(const TopoDS_Edge& edge, point_t&startPoint, point_t&endPoi
 		gp_Dir yDir = circ.YAxis().Direction(); // 圆的Y方向
 
 		gp_Pnt startPoint, endPoint;
-		trimmedCurve->D0(first, startPoint);
-		trimmedCurve->D0(last, endPoint);
+		// 获取圆弧的起点和终点
+		if (!trimmedCurve.IsNull()) {
+			trimmedCurve->D0(first, start);
+			trimmedCurve->D0(last, end);
+		}
+		else {
+			curve->D0(first, start);
+			curve->D0(last, end);
+		}
+
 
 		gp_Vec startVec(center, startPoint);
 		gp_Vec endVec(center, endPoint);
@@ -1661,6 +1670,17 @@ TopoDS_Edge SheetFlattenProcess::calRetractTranslate(SheetFlattenEdgeData & theE
 
 
 }
+void SheetFlattenProcess::calSoltTranslate(const double distance, gp_Trsf& translation, const double& angle) {
+	gp_Vec vec = m_baseVec;
+	//gp_Vec translationVec = normalVec.Normalized() * distance;  // 法向量单位化并乘以平移距离
+	if (angle > M_PI)
+	{
+		vec = -m_baseVec;
+	}
+	gp_Vec translationVec = vec.Normalized() * 10;
+	translation.SetTranslation(translationVec);  // 设置平移矩阵
+	return; // 返回新的边
+}
 //朝着向量方向移动边
 void SheetFlattenProcess::calTranslate(const double distance, gp_Trsf& translation, const double& angle) {
 	gp_Vec vec = m_baseVec;
@@ -1816,12 +1836,49 @@ bool SheetFlattenProcess::judgeless(double x, double y)
 }
 
 
-// 判断两个线段是否相交
+
+
+
 bool AreEdgesIntersecting(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp_Pnt& intersectionPoint) {
+	// 使用 BRepExtrema_DistShapeShape 计算最小距离
+	BRepExtrema_DistShapeShape extrema(edge1, edge2);
+
+	if (!extrema.IsDone()) {
+		std::cerr << "Distance computation failed." << std::endl;
+		return false;
+	}
+
+	// 检查最小距离是否小于容差
+	Standard_Real tolerance = Precision::Confusion();
+	if (extrema.Value() > tolerance) {
+		return false; // 两条边不相交
+	}
+
+	// 获取最近点
+	intersectionPoint = extrema.PointOnShape1(1);
+	return true;
+}
+
+
+// 判断两个线段是否相交
+bool AreEdgesIntersecting1(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2, gp_Pnt& intersectionPoint) {
 	// 提取曲线和参数范围
 	Standard_Real f1, l1, f2, l2;
 	Handle(Geom_Curve) curve1 = BRep_Tool::Curve(edge1, f1, l1);
 	Handle(Geom_Curve) curve2 = BRep_Tool::Curve(edge2, f2, l2);
+
+
+	// 获取第一条线段的起点和终点
+	TopoDS_Vertex v1_1 = TopExp::FirstVertex(edge1);
+	TopoDS_Vertex v1_2 = TopExp::LastVertex(edge1);
+	gp_Pnt p1_1 = BRep_Tool::Pnt(v1_1);
+	gp_Pnt p1_2 = BRep_Tool::Pnt(v1_2);
+
+	// 获取第二条线段的起点和终点
+	TopoDS_Vertex v2_1 = TopExp::FirstVertex(edge2);
+	TopoDS_Vertex v2_2 = TopExp::LastVertex(edge2);
+	gp_Pnt p2_1 = BRep_Tool::Pnt(v2_1);
+	gp_Pnt p2_2 = BRep_Tool::Pnt(v2_2);
 
 	if (curve1.IsNull() || curve2.IsNull()) {
 		std::cerr << "One or both edges have invalid curves." << std::endl;
@@ -1907,7 +1964,7 @@ bool SheetFlattenProcess::EdgeIntersect(const TopoDS_Edge& edge1, const TopoDS_E
 void SheetFlattenProcess::processSameFaceEdgeRelation()
 {
 	vector<TopoDS_Edge> intersectionLines, unintersectionLines;
-	unordered_set<TopoDS_Edge> lines;
+	set<TopoDS_Edge> lines;
 	gp_Pnt point;
 	for (auto &elem : m_EdgeData)
 	{
@@ -1929,6 +1986,10 @@ void SheetFlattenProcess::processSameFaceEdgeRelation()
 						quiry3dEdgeData(otherEdge, pEdgedata);
 						TopoDS_Edge twoEdge = pEdgedata->getOldEdge_2d();
 						//TopoDS_Edge twoEdge = m_ThreeToTwoEdge.find(otherEdge)->second;//旧二维
+						if (twoEdge == item.getOldEdge_2d())
+						{
+							continue;
+						}
 						if (AreEdgesIntersecting(twoEdge, item.getOldEdge_2d(), point))/*AreEdgesIntersecting(twoEdge, ThreeToTwoEdge.find(edge)->second)*/
 						{
 							intersectionLines.emplace_back(twoEdge);
@@ -2358,6 +2419,35 @@ void SheetFlattenProcess::wrapAngle()
 		}
 	}
 }
+bool ConstructEdgesFromPoints(const TopoDS_Edge& edge1, const TopoDS_Edge& edge2,
+	TopoDS_Edge& newEdge1, TopoDS_Edge& newEdge2) {
+	// 提取 edge1 的起点和终点
+	TopoDS_Vertex startVertex1 = TopExp::FirstVertex(edge1);
+	TopoDS_Vertex endVertex1 = TopExp::LastVertex(edge1);
+
+	gp_Pnt startPoint1 = BRep_Tool::Pnt(startVertex1);
+	gp_Pnt endPoint1 = BRep_Tool::Pnt(endVertex1);
+
+	// 提取 edge2 的起点和终点
+	TopoDS_Vertex startVertex2 = TopExp::FirstVertex(edge2);
+	TopoDS_Vertex endVertex2 = TopExp::LastVertex(edge2);
+
+	gp_Pnt startPoint2 = BRep_Tool::Pnt(startVertex2);
+	gp_Pnt endPoint2 = BRep_Tool::Pnt(endVertex2);
+
+	// 构造新的边
+	try {
+		newEdge1 = BRepBuilderAPI_MakeEdge(startPoint1, startPoint2).Edge();
+		newEdge2 = BRepBuilderAPI_MakeEdge(endPoint1, endPoint2).Edge();
+	}
+	catch (Standard_Failure& e) {
+		std::cerr << "Error creating edges: " << e.GetMessageString() << std::endl;
+		return false;
+	}
+
+	return true;
+}
+
 void SheetFlattenProcess::processOutline()
 {
 	for (auto &elem : m_EdgeData)
@@ -2366,6 +2456,33 @@ void SheetFlattenProcess::processOutline()
 		{
 			if (!item.isBendEdge())
 			{
+				vector<TopoDS_Edge> interseEdges,interseNewEdges;
+				TopoDS_Edge newEdge1, newEdge2;
+				item.getVector_sameFace_interseEdge_2d(interseEdges);
+				SheetFlattenEdgeData* pEdgeData;
+				bool isHaveNegativeBend = false;
+				for (auto& elem : interseEdges)
+				{
+					if (quiryEdgeData(elem, pEdgeData))
+					{
+						if (pEdgeData->isNegativeBend())
+						{
+							isHaveNegativeBend = true;
+							pEdgeData->getVector_newEdge_2d(interseNewEdges);
+							if (interseNewEdges.size() >= 3)
+							{
+								ConstructEdgesFromPoints(interseNewEdges[1], interseNewEdges[2], newEdge1, newEdge2);
+								m_outlindeEdges.emplace_back(newEdge1);
+								m_outlindeEdges.emplace_back(newEdge2);
+							}
+
+						}
+					}
+				}
+				if (isHaveNegativeBend)
+				{
+					continue;
+				}
 				TopoDS_Edge aBaseEdge;
 				if (item.isOutline())
 				{
@@ -2396,7 +2513,10 @@ void SheetFlattenProcess::processOutline()
 								}
 								gp_Pnt intersection;
 								//TrimEdgesAtIntersection1(aBaseEdge, aTarEdge, intersection);
-
+								if (aBaseEdge.IsSame(aTarEdge))
+								{
+									continue;
+								}
 								FindIntersectionAndExtend(aBaseEdge, aTarEdge, intersection);
 								item.setOutline(true);
 								pTarEdgadata->setOutline(true);
@@ -2417,7 +2537,7 @@ void SheetFlattenProcess::processOutline()
 }
 
 void SheetFlattenProcess::ToInfo_DXF(const TopoDS_Edge& edge, point_t& startPoint, point_t& endPoint, point_t& center, Standard_Real& radius,
-	Standard_Real& startAngle, Standard_Real& endAngle, int& edgeType)
+	Standard_Real& startAngle, Standard_Real& endAngle, const int& edgeType)
 {
 	ExtractEdgeInfo(edge, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
 	if (edgeType == LineCurve)
@@ -2442,13 +2562,18 @@ void SheetFlattenProcess::check()
 	m_line.clear();
 	m_circle.clear();
 	m_eclipse.clear();
+	for (auto& elem : m_outlindeEdges)
+	{
+		ToInfo_DXF(elem, startPoint, endPoint, center, radius, startAngle, endAngle, edgeType);
+		aBuilder.Add(aCompound, elem);
+	}
 	for (auto elem : m_EdgeData)
 	{
 		for (auto item : elem)
 		{
 			TopoDS_Edge edge;
 			vector<TopoDS_Edge> aEdges;
-			CurveType type = item.GetCurveType();
+			edgeType = item.GetCurveType();
 			if (item.getOverlapeOutlineEdge(edge))
 			{
 				if (edge.IsNull()) {
@@ -3184,7 +3309,7 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 			{
 				SheetFlattenEdgeData* aEdgedata = nullptr;
 				quiryEdgeData(it, aEdgedata);
-				unordered_set<TopoDS_Edge> Edges = aEdgedata->getVector_sameFaceEdge_2d();
+				set<TopoDS_Edge> Edges = aEdgedata->getVector_sameFaceEdge_2d();
 				for (auto &item : rightEdges)
 				{
 					if (Edges.find(item) != Edges.end())
@@ -3203,7 +3328,7 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 			{
 				SheetFlattenEdgeData* aEdgedata = nullptr;
 				quiryEdgeData(it, aEdgedata);
-				unordered_set<TopoDS_Edge> Edges = aEdgedata->getVector_sameFaceEdge_2d();
+				set<TopoDS_Edge> Edges = aEdgedata->getVector_sameFaceEdge_2d();
 				for (auto& item : leftEdges)
 				{
 					if (Edges.find(item) != Edges.end())
@@ -3218,9 +3343,16 @@ void SheetFlattenProcess::moveEdge(vector<SheetFlattenEdgeData> &edges,SheetFlat
 		}
 
 
+		double tempAngle = angle * 180 / M_PI;
 		double moveDis = 2.;
-		calTranslate(moveDis, translation_slot, angle);
-		calTranslate(moveDis, translation, angle);//确定移动方向和角度
+		double moveBendDis = BendingSizeCalculate(tempAngle, 2.);
+		double moveSoltDis = SolttingSizeCalculate(tempAngle, 2.);
+		calSoltTranslate(moveSoltDis, translation_slot, angle);
+		calTranslate(moveBendDis, translation, angle);//确定移动方向和角度
+
+		//double moveDis = 2.;
+		//calTranslate(moveDis, translation_slot, angle);
+		//calTranslate(moveDis, translation, angle);//确定移动方向和角度
 		if (angle > M_PI)
 		{
 			m_isNegativeBend = false;

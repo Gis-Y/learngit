@@ -37,7 +37,16 @@
 #include <CPnts_AbscissaPoint.hxx>
 
 #include <Poly_Triangulation.hxx>
-#include <Poly_ArrayOfNodes.hxx>
+//#include <Poly_ArrayOfNodes.hxx>
+
+
+#include <TopoDS_Edge.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
+#include <TColStd_MapOfInteger.hxx>
+#include<TopoDS_Face.hxx>
+
+
+
 
 #include <BRep_TEdge.hxx>
 #include <BRep_ListIteratorOfListOfCurveRepresentation.hxx>
@@ -70,6 +79,21 @@
 #include "SaveDxfFile.h"
 #include "DxfCoreData.hxx"
 
+
+#include <Standard_Version.hxx>
+
+#define OCCT_VERSION_LESS_THAN_7_8 \
+    ((OCC_VERSION_MAJOR < 7) || \
+    ((OCC_VERSION_MAJOR == 7) && (OCC_VERSION_MINOR < 8)))
+
+
+#if OCCT_VERSION_LESS_THAN_7_8
+	//7.5 code
+#define MAP map
+#else
+	//7.8 code
+#include <Poly_ArrayOfNodes.hxx>
+#endif
 using namespace dxf::core;
 
 
@@ -78,7 +102,28 @@ using namespace std;
 #pragma warning(disable:4267)
 
 #define TOL 1e-3
-#define MAP unordered_map
+
+template<class T>
+size_t calHashCode(const T& data);
+#if OCCT_VERSION_LESS_THAN_7_8
+	//7.5 code
+	#define MAP map
+	template<class T>
+	size_t calHashCode(const T& data)
+	{
+		return data.HashCode(UPPERBOUND);
+	}
+#else
+	//7.8 code
+	template<class T>
+	size_t calHashCode(const T& data)
+	{
+		return std::hash<T>{}(data);
+	}
+	#define MAP unordered_map
+#endif
+
+
 
 class Normal
 {
@@ -406,6 +451,109 @@ public:
 		Init(objFace);
 	}
 
+	#if OCCT_VERSION_LESS_THAN_7_8
+		//7.5 code
+	void Init(const TopoDS_Face& objFace)
+	{
+		face = objFace;
+
+		TopLoc_Location location;
+
+		Handle(Poly_Triangulation) triFace = BRep_Tool::Triangulation(objFace, location);
+
+		if (triFace.IsNull())
+		{
+			cout << "triFace is Null" << endl;
+			return;
+		}
+
+		//BuildNodes(triFace->InternalNodes(), location);
+		//BuildElement(triFace->InternalTriangles());
+
+		BuildNodes(triFace->Nodes(), location);
+		BuildElement(triFace->Triangles());
+		this->DumpNasEx("D:/face1.nas");
+		BuildEdge(objFace, triFace);
+
+	}
+
+
+	void BuildNodes(const TColgp_Array1OfPnt& aNodes, const TopLoc_Location& location)
+	{
+		for (int i = 1; i <= aNodes.Length(); i++)
+		{
+			gp_Pnt vertex = aNodes.Value(i).Transformed(location.Transformation());
+			Node _n;
+			_n.nid = i;
+			_n.x = vertex.X();
+			_n.y = vertex.Y();
+			_n.z = vertex.Z();
+
+			nodes.insert(make_pair(i, _n));
+		}
+	}
+
+
+	Standard_Integer findNode(const TColgp_Array1OfPnt& arrayOfNodes, const gp_Pnt& targetPnt) {
+		Standard_Integer size = arrayOfNodes.Length();
+		for (Standard_Integer i = 1; i <= size; i++) {
+			const gp_Pnt& nodePnt = arrayOfNodes.Value(i - 1);
+			if (nodePnt.IsEqual(targetPnt, 1e-6)) {
+				return i;
+			}
+		}
+		return 0;
+	}
+
+
+	void BuildEdge(const TopoDS_Face& objFace, const Handle(Poly_Triangulation)& triFace)
+	{
+		//TopLoc_Location location;
+		//opencascade::handle<Poly_Triangulation> triFace = BRep_Tool::Triangulation(objFace, location);
+
+		const TColgp_Array1OfPnt& aNodes = triFace->Nodes();
+		for (TopExp_Explorer edgeExp(objFace, TopAbs_EDGE); edgeExp.More(); edgeExp.Next())
+		{
+			const TopoDS_Edge& objEdge = TopoDS::Edge(edgeExp.Current());
+			TopLoc_Location location;
+
+			Handle(Poly_PolygonOnTriangulation) triEdge = BRep_Tool::PolygonOnTriangulation(objEdge, triFace, location);
+
+			TColStd_Array1OfInteger nodes;
+
+			// 获取失败，重新定义
+			if (triEdge.IsNull())
+			{
+				nodes.Resize(1, 2, FALSE);
+				// 获取边的顶点
+				TopoDS_Vertex firstVertex, lastVertex;
+				TopExp::Vertices(objEdge, firstVertex, lastVertex);
+
+				// 获取顶点的坐标
+				gp_Pnt firstVertexPoint = BRep_Tool::Pnt(firstVertex);
+				gp_Pnt lastVertexPoint = BRep_Tool::Pnt(lastVertex);
+
+
+				nodes.SetValue(1, findNode(aNodes, firstVertexPoint));
+				nodes.SetValue(2, findNode(aNodes, lastVertexPoint));
+			}
+			else
+			{
+				nodes.Resize(1, triEdge->Nodes().Size(), FALSE);
+				nodes = triEdge->Nodes();
+			}
+
+			edges.insert(make_pair(objEdge, nodes));
+			edgesHash.insert(make_pair(objEdge.HashCode(UPPERBOUND), nodes));
+
+			for (int i = 1; i <= nodes.Size(); i++)
+			{
+				edgeNodes.insert(nodes[i]);
+			}
+		}
+	}
+	#else
+		//7.8 code
 	void Init(const TopoDS_Face& objFace)
 	{
 		face = objFace;
@@ -439,28 +587,6 @@ public:
 			_n.z = vertex.Z();
 
 			nodes.insert(make_pair(i, _n));
-		}
-	}
-
-	void BuildElement(const Poly_Array1OfTriangle& aTri)
-	{
-		for (Standard_Integer i = 1; i <= aTri.Length(); i++)
-		{
-			Standard_Integer nVertexIndex1 = 0;
-			Standard_Integer nVertexIndex2 = 0;
-			Standard_Integer nVertexIndex3 = 0;
-
-			Poly_Triangle aTriangle = aTri.Value(i);
-			aTriangle.Get(nVertexIndex1, nVertexIndex2, nVertexIndex3);
-
-			Element _triElem;
-			_triElem.eid = i;
-			_triElem.pid = 1;
-			_triElem.n1 = nVertexIndex1;
-			_triElem.n2 = nVertexIndex2;
-			_triElem.n3 = nVertexIndex3;
-
-			elements.insert(make_pair(i, _triElem));
 		}
 	}
 
@@ -522,6 +648,34 @@ public:
 			}
 		}
 	}
+	#endif
+
+
+
+	void BuildElement(const Poly_Array1OfTriangle& aTri)
+	{
+		for (Standard_Integer i = 1; i <= aTri.Length(); i++)
+		{
+			Standard_Integer nVertexIndex1 = 0;
+			Standard_Integer nVertexIndex2 = 0;
+			Standard_Integer nVertexIndex3 = 0;
+
+			Poly_Triangle aTriangle = aTri.Value(i);
+			aTriangle.Get(nVertexIndex1, nVertexIndex2, nVertexIndex3);
+
+			Element _triElem;
+			_triElem.eid = i;
+			_triElem.pid = 1;
+			_triElem.n1 = nVertexIndex1;
+			_triElem.n2 = nVertexIndex2;
+			_triElem.n3 = nVertexIndex3;
+
+			elements.insert(make_pair(i, _triElem));
+		}
+	}
+
+
+	
 
 	void GetOnestepCOG()
 	{
@@ -681,8 +835,8 @@ public:
 		{
 			const TopoDS_Edge& objEdge = TopoDS::Edge(edgeExp.Current());
 
-			const TColStd_Array1OfInteger& nds = edgesHash[hash<TopoDS_Edge>{}(objEdge)];
-
+			//const TColStd_Array1OfInteger& nds = edgesHash[objEdge.HashCode(UPPERBOUND)];
+			const TColStd_Array1OfInteger& nds = edgesHash[calHashCode(objEdge)];
 			n1 = nds[1];
 			n2 = nds.Size();
 
@@ -782,7 +936,8 @@ public:
 
 		for (auto p : edges )
 		{
-			if (hash<TopoDS_Edge>{}(p.first) == hash<TopoDS_Edge>{}(e))
+			//if (p.first.HashCode(UPPERBOUND) == e.HashCode(UPPERBOUND))
+			if (calHashCode(p.first) == calHashCode(e))
 			{
 				for (int i = 1; i <= edges[p.first].Size(); i++)
 				{
@@ -832,15 +987,17 @@ public:
 
 		for (set<int>::iterator it = edgeNodes.begin(); it != edgeNodes.end(); it++)
 		{
-
-			TColStd_Array1OfInteger edgsNd = edgesHash[hash<TopoDS_Edge>{}(e)];
+			//TColStd_Array1OfInteger edgsNd = edgesHash[e.HashCode(UPPERBOUND)];
+			TColStd_Array1OfInteger edgsNd = edgesHash[calHashCode(e)];
 
 			bool edgeNodeFlag = false;
 
 			// 判断点是否是基准edge上的点，如果是进入下一个循环
-			for (int i = 1; i <= edgesHash[hash<TopoDS_Edge>{}(e)].Size(); i++)
+			//for (int i = 1; i <= edgesHash[e.HashCode(UPPERBOUND)].Size(); i++)
+			for (int i = 1; i <= edgesHash[calHashCode(e)].Size(); i++)
 			{
-				if (*it == edgesHash[hash<TopoDS_Edge>{}(e)][i])
+				//if (*it == edgesHash[e.HashCode(UPPERBOUND)][i])
+				if (*it == edgesHash[calHashCode(e)][i])
 				{
 					edgeNodeFlag = true;
 					break;
@@ -1294,7 +1451,8 @@ public:
 
 bool operator <(const TopoDS_Edge& e1, const TopoDS_Edge& e2)
 {
-	if (hash<TopoDS_Edge>{}(e1) < hash<TopoDS_Edge>{}(e2))
+	//if (e1.HashCode(UPPERBOUND) < e2.HashCode(UPPERBOUND))
+	if (calHashCode( e1) < calHashCode( e2))
 	{
 		return true;
 	}
@@ -1306,7 +1464,8 @@ bool operator <(const TopoDS_Edge& e1, const TopoDS_Edge& e2)
 
 bool operator <(const TopoDS_Face& f1, const TopoDS_Face& f2)
 {
-	if (hash<TopoDS_Face>{}(f1) < hash<TopoDS_Face>{}(f2))
+	//if (f1.HashCode(UPPERBOUND) < f2.HashCode(UPPERBOUND))
+	if (calHashCode( f1) < calHashCode( f2))
 	{
 		return true;
 	}
@@ -1339,12 +1498,16 @@ struct FlattenFaceNode
 		{
 			const TopoDS_Edge& objEdge = TopoDS::Edge(edgeExp.Current());
 
-			faceEdgeHash.push_back(hash<TopoDS_Edge>{}(objEdge));
+			//faceEdgeHash.push_back(objEdge.HashCode(UPPERBOUND));
+			faceEdgeHash.push_back(calHashCode( objEdge));
 
 		}
 
-		edgeHash = hash<TopoDS_Edge>{}(edge);
-		faceHash = hash<TopoDS_Face>{}(flattenFace.face);
+		// edgeHash = edge.HashCode(UPPERBOUND);
+		//faceHash = flattenFace.face.HashCode(UPPERBOUND);
+
+		edgeHash = calHashCode( edge);
+		faceHash = calHashCode( flattenFace.face);
 	}
 
 
@@ -1381,8 +1544,8 @@ struct FlattenFaceNode
 		for (TopExp_Explorer edgeExp(flattenFace.face, TopAbs_EDGE); edgeExp.More(); edgeExp.Next())
 		{
 			const TopoDS_Edge& _edge = TopoDS::Edge(edgeExp.Current());
-
-			if (hash<TopoDS_Edge>{}(objEdge) == hash<TopoDS_Edge>{}(_edge))
+			//if (objEdge.HashCode(UPPERBOUND) == _edge.HashCode(UPPERBOUND))
+			if (calHashCode( objEdge) == calHashCode( _edge))
 			{
 				triEdge = BRep_Tool::PolygonOnTriangulation(_edge, triFace, location);
 				break;

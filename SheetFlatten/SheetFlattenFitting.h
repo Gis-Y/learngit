@@ -22,6 +22,10 @@
 #include <BRepBuilderAPI_MakeVertex.hxx>
 #include <Geom2d_Ellipse.hxx>
 
+#include<gp_Circ2d.hxx>
+#include<gp_Elips2d.hxx>
+#include<gp_Circ.hxx>
+
 #include <Geom2d_Circle.hxx>
 
 

@@ -21,7 +21,7 @@
 #include <Poly_PolygonOnTriangulation.hxx>
 
 #include <vector>
-#include<unordered_set>
+//#include<unordered_set>
 using namespace std;
 
 class SheetFlattenEdgeData
@@ -83,9 +83,8 @@ public:
     void setVector_sameFaceEdge_uninterseEdge_2d(const vector<TopoDS_Edge>& edges) { m_vector_sameFaceEdge_uninterseEdge_2d = edges; }
 
 
-    unordered_set<TopoDS_Edge> getVector_sameFaceEdge_2d() { return  m_vector_sameFaceEdge_2d; }
-    const unordered_set<TopoDS_Edge>& getVector_sameFaceEdge_2d() const { return  m_vector_sameFaceEdge_2d; }
-    void setVector_sameFaceEdge_2d(const unordered_set<TopoDS_Edge>& edges) { m_vector_sameFaceEdge_2d = edges; }
+    set<TopoDS_Edge> getVector_sameFaceEdge_2d() { return  m_vector_sameFaceEdge_2d; }
+    void setVector_sameFaceEdge_2d(const set<TopoDS_Edge>& edges) { m_vector_sameFaceEdge_2d = edges; }
 
 
     // Getter and Setter for vector_interseEdge_new2d
@@ -221,7 +220,7 @@ private:
 	vector<TopoDS_Edge> m_vector_sameFace_interseEdge_2d;//共面且相交
 	vector<TopoDS_Edge> m_vector_interseEdge_2d;//只相交，无所谓共面
 	vector<TopoDS_Edge> m_vector_sameFaceEdge_uninterseEdge_2d;//共面但不相交
-    unordered_set<TopoDS_Edge> m_vector_sameFaceEdge_2d;//共面的任意线
+    set<TopoDS_Edge> m_vector_sameFaceEdge_2d;//共面的任意线
 	vector<TopoDS_Edge> m_vector_interseEdge_new2d;//共面且相交判断条件在新二维的基础上
     vector<TopoDS_Edge> m_vector_wrapAngle;
 	bool m_bOverlapeEdge = false;
