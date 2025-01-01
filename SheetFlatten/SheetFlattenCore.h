@@ -120,6 +120,7 @@ private:
 	set<TopoDS_Edge> m_setSplitEdges;
 	set<TopoDS_Edge> m_setSoltEdges;
 	map<TopoDS_Edge, set<TopoDS_Face> > mapEdgeAdjFaces;
+	map<TopoDS_Edge, pair<TopoDS_Face,int>> m_mapEdge_Face;
 	map<TopoDS_Edge, double> mapFacesAngle;
 	set<TopoDS_Face> finishedFaces;
 	vector<TopoDS_Face> m_vector_AllFaces;
@@ -395,7 +396,19 @@ void SheetFlattenCore::process()
 			}
 			if (m_setSplitEdges.find(elem.first) != m_setSplitEdges.end())
 			{
-				m_EdgeData.setSplitEdge(true);
+				//m_EdgeData.setWrapAngle(true);
+				vector<TopoDS_Face> SplitFace;
+				if (m_mapEdge_Face.find(elem.first) != m_mapEdge_Face.end())
+				{
+					SplitFace.emplace_back(m_mapEdge_Face.find(elem.first)->second.first);
+					if (m_mapEdge_Face.find(elem.first)->second.second == 2)
+					{
+						m_EdgeData.setSplitEdge(true);
+					}
+				}
+				m_EdgeData.setVector_face(SplitFace);
+				//m_EdgeData.setSplitEdge(true);
+				m_EdgeData.setBendEdge(false);
 			}
 			m_EdgeData.setOldEdge_2d(elem.second.first);
 			m_EdgeData.SetCurveType(elem.second.second);
@@ -702,8 +715,22 @@ inline void SheetFlattenCore::Fitting(tree<FlattenFaceNode>::iterator it)
 	{
 		cout << "CreateOutline" << endl;
 
-		//lit.node()->get()->flattenFace.CreateOutline(aCompound,m_flat, aFalttenMove.m_ThreeToTwoEdge);
 		lit.node()->get()->flattenFace.CreateOutline(aCompound, m_flat, m_m3dTo2d);
+
+		for (auto& elem : lit.node()->get()->flattenFace.edges)
+		{
+			if (m_setSplitEdges.find(elem.first) != m_setSplitEdges.end())
+			{
+				if (m_mapEdge_Face.find(elem.first) != m_mapEdge_Face.end())
+				{
+					m_mapEdge_Face[elem.first] = make_pair(lit.node()->get()->flattenFace.face, 2);
+				}
+				else
+				{
+					m_mapEdge_Face[elem.first] = make_pair(lit.node()->get()->flattenFace.face,1);
+				}
+			}
+		}
 		// aBuilder.Add(aCompound, lit.node()->get()->flattenFace.CreateOutline());
 	}
 

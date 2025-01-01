@@ -108,6 +108,10 @@ public:
 
     bool isNegativeBend() const { return m_bNegativeBend; }
     void setNegativeBend(bool midleEdge) { m_bNegativeBend = midleEdge; }
+    
+
+    bool isTypesetting() const { return m_bTypesetting; }
+    void setTypesetting(bool midleEdge) { m_bTypesetting = midleEdge; }
 
     // Getter and Setter for bOverlapeEdge
     bool isOverlapeEdge() const { return  m_bOverlapeEdge; }
@@ -232,6 +236,7 @@ private:
 	bool m_bSplitEdge = false;
     bool m_bFinish = false;
     bool m_bAddWrapAngleEdge = false;
+    bool m_bTypesetting = false;
 	double m_angle = false;
     bool m_bNegativeBend = false;
     bool m_bOutline = false;
