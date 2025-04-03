@@ -71,8 +71,9 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(ProjectDir)eigen3;D:\OCC\install\inc;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)eigen3;D:\OCC\install\inc;D:\2_learnGit\SheetFlatten;$(IncludePath)</IncludePath>
     <LibraryPath>D:\OCC\install\win64\vc14\libd;D:\OCC\build\win64\vc14\libd;$(LibraryPath)</LibraryPath>
+    <ExternalIncludePath>D:\Boost\boost_1_87_0;$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(ProjectDir)eigen3;E:\OpenCASCADE-7.8.0-vc143-64\opencascade-7.8.0\inc;$(IncludePath)</IncludePath>
@@ -112,6 +113,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>false</ConformanceMode>
       <AdditionalIncludeDirectories>D:\1_work\SheetFlatten\DxfRead;D:\1_work\SheetFlatten\DxfCore;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <LanguageStandard>Default</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>

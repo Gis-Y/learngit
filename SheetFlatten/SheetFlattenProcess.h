@@ -37,6 +37,8 @@
 
 #include "SheetFlattenEdgeData.h"
 #include"UniversalOtherSizeCalculate.h"
+#include <boost/graph/adjacency_list.hpp>
+#include <boost/graph/breadth_first_search.hpp>
 
 #include <algorithm>
 #include <iostream>
@@ -46,6 +48,28 @@
 #include<unordered_set>
 
 using namespace std;
+using namespace boost;
+
+// 定义顶点属性结构
+struct VertexProperties {
+	int id;            // 自定义的 id 属性
+	std::string name;  // 自定义的 name 属性
+	map<int, SheetFlattenEdgeData> data;
+};
+
+
+typedef adjacency_list<vecS, vecS, undirectedS, VertexProperties> Graph;
+typedef graph_traits<Graph>::vertex_descriptor Vertex;
+
+// 定义 BFS 访问者，打印遍历过程中的每个顶点
+class bfs_visitor : public default_bfs_visitor {
+public:
+	bfs_visitor() {}
+
+	void discover_vertex(Vertex u, const Graph& g) {
+		std::cout << "Discovered vertex: " << u << std::endl;
+	}
+};
 
 struct moveData {
 	int adjEdgeDataIndex;
@@ -3400,9 +3424,46 @@ void SheetFlattenProcess::processEdges_WrapAngle() {
 }
 
 
-
 void SheetFlattenProcess::generate()
 {
+	Graph g;
+	std::unordered_set<std::vector<SheetFlattenEdgeData>*> processedGroups;
+	int i = -1, j = -1;
+	for (auto& baseGroup : m_EdgeData) {
+		++i;
+		j = -1;
+		for (auto& targetGroup : m_EdgeData) {
+			++j;
+			// 如果是同一个分组，跳过
+			if (&baseGroup == &targetGroup) continue;
+			if (processedGroups.find(&targetGroup) != processedGroups.end()) {
+				continue;
+			}
+
+			if (typesetting(baseGroup, targetGroup))
+			{
+				processedGroups.insert(&targetGroup);
+				processedGroups.insert(&baseGroup);
+
+				map<int, SheetFlattenEdgeData> data;
+				data[i] = baseGroup[i];
+				Vertex v0 = add_vertex(g);
+				g[v0].id = i;
+				g[v0].data = data;
+				// 逐一添加节点
+			
+				
+				data.clear();
+				Vertex v1 = add_vertex(g);
+				g[v1].id = j;
+				data[j] = targetGroup[j];
+				g[v1].data = data;
+				add_edge(v0, v1, g);
+	
+			}
+		}
+	}
+
 	check();
 	processSplitEdge();
 	check();
